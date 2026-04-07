@@ -32,7 +32,7 @@ st.set_page_config(
 # Custom CSS — Neural Terminal aesthetic
 # ---------------------------------------------------------------------------
 
-st.html("""
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Outfit:wght@300;400;500;600&display=swap');
 
@@ -671,7 +671,7 @@ hr {
 [data-testid="stDecoration"] { display: none; }
 
 </style>
-""")
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Session state initialisation

@@ -12,11 +12,15 @@ RAGBase is an open-source, fully offline RAG (Retrieval-Augmented Generation) sy
 
 ---
 
-## Demo
+## Screenshots
 
-> **Add a screenshot or GIF here.**
-> Run the app, take a screenshot of a question being answered, and drop it in a `docs/` folder:
-> `![RAGBase demo](docs/demo.png)`
+| Homescreen | File Upload |
+|:---:|:---:|
+| ![Homescreen](docs/Homescreen.png) | ![File Uploaded](docs/FileUploaded.png) |
+
+| Answering a Question | Model & Retrieval Settings |
+|:---:|:---:|
+| ![Answer to Question](docs/Answer%20to%20Question.png) | ![Model and Retrieval Settings](docs/Model%20and%20Retrival%20Settngs.png) |
 
 ---
 
@@ -139,7 +143,6 @@ ragbase/
 ├── retriever.py        # HybridRetriever, reranker, LCEL chain
 ├── config.py           # All settings
 ├── requirements.txt
-├── sample_docs/        # Demo documents
 ├── .streamlit/
 │   └── config.toml     # Dark theme config
 └── .gitignore
