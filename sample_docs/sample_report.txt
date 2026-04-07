@@ -1,0 +1,50 @@
+ACME CORPORATION — Q3 2024 FINANCIAL REPORT
+
+Executive Summary
+-----------------
+Acme Corporation delivered strong performance in Q3 2024, with total revenue reaching $48.7 million,
+representing a 14.2% year-over-year increase. Operating income improved to $9.3 million, driven by
+efficiency gains in the manufacturing division and expansion into three new regional markets.
+
+Revenue Breakdown
+-----------------
+Product Sales:       $31.2 million  (+18% YoY)
+Service Revenue:     $12.4 million  (+7% YoY)
+Licensing & IP:       $5.1 million  (+9% YoY)
+Total Revenue:       $48.7 million  (+14.2% YoY)
+
+Operating Expenses
+------------------
+Cost of Goods Sold:  $22.1 million
+Research & Dev:       $6.8 million
+Sales & Marketing:    $5.3 million
+General & Admin:      $5.2 million
+Total OpEx:          $39.4 million
+
+Operating Income:     $9.3 million (19.1% margin)
+Net Income:           $7.1 million (14.6% margin)
+
+Headcount & Operations
+-----------------------
+Total Employees: 1,240 (up from 1,105 at end of Q2 2024)
+New Hires Q3:    162
+Attrition Q3:    27
+
+Key Milestones
+--------------
+- Launched AcmePro v4.0 in August 2024, now deployed at 340 enterprise clients.
+- Opened new regional offices in Austin, TX and Amsterdam, Netherlands.
+- Completed acquisition of DataBridge Inc. for $8.2 million in cash.
+- Awarded ISO 27001 security certification for cloud infrastructure.
+
+Outlook for Q4 2024
+--------------------
+Management expects revenue in the range of $51–54 million for Q4, supported by the holiday
+product cycle and the full-quarter contribution of DataBridge revenues. Capital expenditure
+guidance remains at $3.5 million for infrastructure upgrades.
+
+Risk Factors
+------------
+- Supply chain disruptions in Asia-Pacific may impact hardware delivery timelines.
+- Macroeconomic headwinds could slow enterprise software procurement in Europe.
+- Integration costs from the DataBridge acquisition are expected to reduce Q4 margins by 1–2%.

@@ -1,0 +1,45 @@
+RAGBase — Frequently Asked Questions
+
+Q: What is RAGBase?
+A: RAGBase is an open-source, offline Retrieval-Augmented Generation (RAG) system that lets you
+   chat with your own documents. It runs entirely on your local machine — no data leaves your device.
+
+Q: What file formats does RAGBase support?
+A: RAGBase supports PDF (including scanned PDFs via OCR), DOCX, TXT, PNG, JPG, JPEG, CSV, and Excel
+   files (XLSX/XLS). You can upload multiple files at once through the Streamlit interface.
+
+Q: Does RAGBase require an internet connection?
+A: No. RAGBase runs fully offline. The only external dependency is Ollama, which runs the LLM locally
+   on your hardware. Embedding models are downloaded once from Hugging Face and then cached locally.
+
+Q: How does the hybrid search work?
+A: RAGBase combines two retrieval methods:
+   1. Semantic search using FAISS vector similarity with Hugging Face embeddings.
+   2. Keyword search using TF-IDF cosine similarity.
+   Results from both methods are merged and optionally re-ranked using a cross-encoder model.
+
+Q: What LLMs are supported?
+A: Any model available through Ollama. The default is llama3.2. Other tested models include
+   llama3.1, mistral, gemma2:9b, and phi3. Switch models from the Configuration panel.
+
+Q: How do I change the embedding model?
+A: Open the Configuration panel in the sidebar, select a different embedding model from the dropdown,
+   then rebuild the index. The system will re-encode all documents with the new model.
+
+Q: Can RAGBase answer questions about spreadsheet data?
+A: Yes. When you ask a numeric question (e.g., "what is the total revenue?" or "how many employees
+   are there?"), RAGBase automatically detects the tabular query, generates pandas code via the LLM,
+   and executes it against your uploaded CSV or Excel file.
+
+Q: Where are my documents stored?
+A: Uploaded files are saved to the `uploaded_docs/` directory locally. The FAISS index and TF-IDF
+   artifacts are stored in `ragbase_index/`. Both directories are excluded from git.
+
+Q: How do I rebuild the index with different settings?
+A: Adjust chunk size, chunk overlap, or embedding model in the Configuration panel, then upload your
+   documents again and click "Build Index". The old index will be replaced.
+
+Q: What hardware is recommended?
+A: A modern CPU is sufficient for document ingestion and retrieval. For LLM inference, a machine
+   with 8GB+ RAM works for smaller models (phi3, mistral). For llama3.2:8b, 16GB RAM is recommended.
+   GPU acceleration via Ollama is supported on Apple Silicon and NVIDIA CUDA.

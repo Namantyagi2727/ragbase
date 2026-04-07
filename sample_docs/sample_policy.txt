@@ -1,0 +1,66 @@
+GLOBALTECH INC — EMPLOYEE LEAVE POLICY
+Version 3.1 | Effective January 1, 2024
+
+1. PURPOSE
+----------
+This policy outlines the types of leave available to GlobalTech employees, eligibility criteria,
+accrual rules, and the process for requesting and approving leave.
+
+2. SCOPE
+--------
+This policy applies to all full-time and part-time employees of GlobalTech Inc. and its wholly
+owned subsidiaries. Contractors and consultants are not covered under this policy.
+
+3. ANNUAL LEAVE (VACATION)
+---------------------------
+Full-time employees accrue annual leave as follows:
+  - Years 0–2:    15 days per year  (1.25 days/month)
+  - Years 3–5:    18 days per year  (1.5 days/month)
+  - Years 6–10:   22 days per year  (~1.83 days/month)
+  - Years 10+:    25 days per year  (~2.08 days/month)
+
+Part-time employees accrue leave on a pro-rated basis proportional to their contracted hours.
+
+Maximum carry-over: Employees may carry over up to 5 unused days into the next calendar year.
+Any days above this cap are forfeited on December 31.
+
+4. SICK LEAVE
+--------------
+All employees receive 10 paid sick days per calendar year. Sick leave does not roll over.
+For absences exceeding 3 consecutive days, a medical certificate from a licensed practitioner
+is required. Extended sick leave beyond 10 days may be covered under short-term disability.
+
+5. PARENTAL LEAVE
+------------------
+Primary caregiver: 16 weeks of fully paid parental leave.
+Secondary caregiver: 4 weeks of fully paid parental leave.
+Parental leave must be taken within 12 months of the child's birth or adoption date.
+Employees must give at least 6 weeks' notice before planned parental leave.
+
+6. BEREAVEMENT LEAVE
+---------------------
+Immediate family (spouse, child, parent, sibling): 5 paid days.
+Extended family (grandparent, in-law, aunt/uncle): 3 paid days.
+Close friend (at manager's discretion): 1 paid day.
+
+7. PUBLIC HOLIDAYS
+-------------------
+GlobalTech observes 11 federal public holidays per year. Employees required to work on a public
+holiday will receive either a day off in lieu or time-and-a-half pay, at the manager's discretion.
+
+8. UNPAID LEAVE
+----------------
+Employees may request up to 12 weeks of unpaid leave per year for personal reasons, subject to
+manager approval and business needs. Unpaid leave does not affect service continuity calculations.
+
+9. LEAVE REQUEST PROCESS
+-------------------------
+1. Submit a leave request via the HR portal at least 2 weeks in advance for planned leave.
+2. Your direct manager approves or declines within 3 business days.
+3. HR records the approved leave and updates your leave balance.
+4. For emergency or unplanned leave, notify your manager as early as possible on the day of absence.
+
+10. CONTACT
+-----------
+For questions about this policy, contact the People & Culture team at hr@globaltech-example.com
+or reach out to your HR Business Partner.
