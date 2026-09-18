@@ -136,6 +136,17 @@ class HybridRetriever(BaseRetriever):
 # Cross-Encoder Reranker
 # ---------------------------------------------------------------------------
 
+_cross_encoder_cache: dict = {}
+
+
+def _get_cross_encoder(model_name: str):
+    """Load a CrossEncoder once per model name and reuse it across queries."""
+    if model_name not in _cross_encoder_cache:
+        from sentence_transformers import CrossEncoder
+        _cross_encoder_cache[model_name] = CrossEncoder(model_name)
+    return _cross_encoder_cache[model_name]
+
+
 class CrossEncoderReranker(BaseRetriever):
     """Re-ranks HybridRetriever results using a cross-encoder model."""
 
@@ -156,8 +167,7 @@ class CrossEncoderReranker(BaseRetriever):
             return candidates
 
         try:
-            from sentence_transformers import CrossEncoder
-            ce = CrossEncoder(self.model_name)
+            ce = _get_cross_encoder(self.model_name)
             pairs = [(query, doc.page_content) for doc in candidates]
             scores = ce.predict(pairs)
             ranked = sorted(zip(scores, candidates), key=lambda x: x[0], reverse=True)
