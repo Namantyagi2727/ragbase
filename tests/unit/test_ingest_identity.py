@@ -94,7 +94,7 @@ def test_oversized_file_is_skipped(sample_corpus, tmp_path, monkeypatch):
 
 
 def test_pdf_page_limit_is_enforced_and_reported(tmp_path, monkeypatch):
-    from conftest import make_pdf
+    from tests.conftest import make_pdf
 
     monkeypatch.setattr(ingest.config, "MAX_PDF_PAGES", 1)
     pdf = make_pdf(tmp_path / "long.pdf", ["page one text", "page two text"])
