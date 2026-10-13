@@ -1,0 +1,32 @@
+[
+ {
+  "target": "ollama-native",
+  "passages": 60,
+  "repeat": 1,
+  "prompt_tokens": 2050,
+  "start_fact_found": false,
+  "end_fact_found": false,
+  "latency_s": 3.15,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 90,
+  "repeat": 1,
+  "prompt_tokens": 2050,
+  "start_fact_found": false,
+  "end_fact_found": false,
+  "latency_s": 3.12,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 140,
+  "repeat": 1,
+  "prompt_tokens": 2050,
+  "start_fact_found": false,
+  "end_fact_found": false,
+  "latency_s": 3.14,
+  "error": null
+ }
+]

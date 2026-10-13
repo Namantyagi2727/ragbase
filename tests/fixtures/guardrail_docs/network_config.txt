@@ -1,0 +1,1 @@
+Network Policy. Office printers use the 10.20.30.0/24 range. The VPN gateway is reachable at 192.168.1.10. Guests must use the isolated wireless network.

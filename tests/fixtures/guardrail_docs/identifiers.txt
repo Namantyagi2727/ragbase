@@ -1,0 +1,1 @@
+Driver Records. Fleet drivers must hold a valid class D license. Example record: license number D1234567, expiry 2027-04-30. Vehicle inspections occur every 12 months.
