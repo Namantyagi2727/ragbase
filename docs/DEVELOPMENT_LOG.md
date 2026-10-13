@@ -8,8 +8,8 @@ test results and known limitations.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repository audit and implementation plan | Done |
-| 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — in review ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
-| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Not started |
+| 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
+| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — in review ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
 | 2 | Optional Prism gateway integration | Not started |
 | 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Not started |
 | 4 | Streamlit integration and public demo | Not started |
@@ -127,3 +127,124 @@ With `llama3.2`, "How many units were sold in the EU?" was planned as
 - **UI fonts** are loaded from Google Fonts, so the interface itself makes
   one external request.
 - **README** still describes the pre-upgrade system; updated in Phase 5.
+
+## Phase 1B — LangGraph agentic engine
+
+### Architecture
+
+```
+plan ──simple──▶ standard ───────────────────────────────▶ finalize
+  └──complex──▶ retrieve ▶ synthesize ▶ verify ──accept──▶ finalize
+                   ▲            ▲          │
+                   └── refine ──┘◀─revise──┘   (≤ max_revisions, time left)
+```
+
+| Component | Kind | Role |
+|---|---|---|
+| Planner | Model decision (structured `QueryPlan`) | Chooses the simple or complex route, writes up to 3 sub-queries, targets documents, flags comparisons |
+| Retrieval tools | Deterministic | `hybrid_search` (validated query, k, known-source filter) and `list_documents`; reuse the Phase 1A retriever and reranker. No filesystem, shell or network tools |
+| Synthesizer | Model generation | Answers from numbered evidence, cites `[E#]`, states conflicts, abstains when unsupported |
+| Verifier | Deterministic checks + model decision (structured `VerifierOutput`) | Citation validity; numbers in each cited claim present in its cited passages; per-claim verdicts from the model; recommends accept / revise with a follow-up search |
+| Refinement | Deterministic control | At most `max_revisions` (default 1) rounds: optional targeted search, then re-synthesis with verifier feedback |
+
+The planner and verifier make distinct model-driven decisions; retrieval is a
+tool layer, not an extra persona. The simple route is the Standard RAG path
+(one search, one answer call).
+
+The engine lives in `agent/` and has no Streamlit dependency;
+`python -m agent "question"` runs it against a built index and prints the
+trace.
+
+### Verification is separate from citation validity
+
+`Verification` records independently:
+
+- `citation_ok` — deterministic (`CitationReport.ok`): cited IDs exist, no invented references.
+- `grounding` — `verified`, `partially_verified`, `unsupported`, `not_verified` or `skipped`.
+- `llm_status` — `completed`, `failed` or `skipped`.
+
+A verifier call that fails, returns invalid JSON, or returns no usable
+verdicts gives `not_verified`; it is never reported as verified. Verdicts
+that reference unknown evidence or non-existent claims are discarded and
+reported. Final status:
+
+| Status | Meaning |
+|---|---|
+| `completed` | Verified (or a valid abstention) |
+| `completed_unverified` | Citations valid but claims not verified (simple route, or verifier failed) |
+| `qualified` | Unresolved problems after the allowed revisions; answer carries a visible warning |
+| `failed` / `timeout` | Backend error or time budget exhausted |
+
+### Bounds and failure handling
+
+Three independent limits: `max_revisions`, a per-run time budget (default
+180 s; no revision starts with < 15 s left), and LangGraph's recursion limit.
+Backend errors in planning or synthesis end the run as `failed`; verifier
+errors degrade to `not_verified`. Planner output that fails validation falls
+back to the simple route, and the fallback reason is stored in the result
+and trace.
+
+### Findings from live runs with `llama3.2` and fixes
+
+| Observed | Fix |
+|---|---|
+| Verifier omitted claim verdicts (correctly reported as not verified, but useless) | Verdicts required (≥1) in the schema, which Ollama's constrained decoding enforces |
+| Verifier named claims by number instead of text | Verdicts reference `claim_number`, mapped back to the answer's claims in code |
+| Planner sent simple questions down the complex route and put file names inside queries | Planner examples, "most questions are simple" guidance, temperature 0, file-name prefixes stripped from queries |
+| Years from source file names flagged as unsupported numbers | Numbers in a cited passage's source name count as available |
+| A partial answer containing "the documents do not mention X" was treated as a full abstention, skipping verification | An answer is an abstention only if it cites nothing; absence statements are excluded from claim verification and reported |
+| Two trace events shared one step number | Unique step numbering |
+
+Planner routing on seven test questions was identical across three repeated
+runs (temperature 0): factual lookups → simple; comparisons and multi-part
+questions → complex.
+
+### Live examples (fixture corpus, `llama3.2`, after fixes)
+
+| Question type | Route | LLM calls | Searches | Status | Time |
+|---|---|---|---|---|---|
+| Single fact | simple | 2 | 1 | completed_unverified | 1.0 s |
+| Compare two policy versions | complex (per-document searches) | 3 | 3 | completed | 5.4 s |
+| Conflicting deadlines across versions | simple | 2 | 1 | completed_unverified | 0.9 s |
+| Two-part question | complex | 3 | 1 | completed | 2.3 s |
+| Unanswerable | simple | 2 | 1 | completed (abstained) | 0.6 s |
+
+Standard RAG produced equivalent answers on the simple questions in about
+the same time. On the comparison it combined both years' figures under a
+single citation, whereas the agent cited each policy separately. This is
+an observation from one run, not a measured improvement; Phase 3 will
+compare the modes on a labelled dataset.
+
+On a real two-column PDF (driver's manual), a multi-part question used the
+refinement loop: the verifier's follow-up search found the passage with the
+under-21 limit, but the 3B model's revised answer still contradicted itself,
+and the run ended `qualified` with the problem claim listed.
+
+### Tests
+
+| Suite | Count |
+|---|---|
+| Unit (no models) | 157 |
+| Integration (real embeddings + reranker) | 4 |
+| Live (local Ollama) | 6 |
+
+All 167 pass locally; CI runs lint and the unit suite on every pull request.
+
+### Known limitations after Phase 1B
+
+- **Small-model quality.** `llama3.2` (3B) drafts answers that can be
+  internally inconsistent; the verifier catches some but not all problems.
+  The verifier can be pointed at a larger model with
+  `RAGBASE_AGENT_VERIFIER_MODEL` (not yet evaluated).
+- **Absence statements are unverified.** A wrong "the documents do not
+  state X" is not caught by claim verification.
+- **Simple-route answers are never claim-verified** (by design, to keep
+  simple questions to two model calls); they are reported as
+  `completed_unverified`.
+- **Multi-column PDFs** are extracted with interleaved columns by
+  pdfplumber, which degrades retrieval on such documents.
+- **No UI integration yet** — Agentic mode is available through code and
+  the CLI; the Streamlit mode switch is Phase 4.
+- **Cost of agentic mode:** 2 model calls on the simple route, typically 3–5
+  on the complex route (at most 8 with one revision and every structured-output
+  repair attempt used), versus 1 for Standard RAG.
