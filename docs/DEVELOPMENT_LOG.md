@@ -268,15 +268,19 @@ re-check — the passage's two-column extraction interleaves the "over 21"
 text with the DWI lines. `verified` therefore means "passed the
 deterministic checks and the model's claim check", not "correct".
 
+A final deterministic correction: an extra malformed verdict (unknown
+evidence ID or non-existent claim number) alongside otherwise complete
+coverage previously still allowed `verified`; it now yields `incomplete`.
+
 ### Tests
 
 | Suite | Count |
 |---|---|
-| Unit (no models) | 174 |
+| Unit (no models) | 176 |
 | Integration (real embeddings + reranker) | 4 |
 | Live (local Ollama) | 6 |
 
-All 184 pass locally; CI runs lint and the unit suite on every pull request.
+All 186 pass locally; CI runs lint and the unit suite on every pull request.
 
 ### Known limitations after Phase 1B
 
@@ -300,3 +304,18 @@ All 184 pass locally; CI runs lint and the unit suite on every pull request.
 - **Cost of agentic mode:** 2 model calls on the simple route, typically 3–5
   on the complex route (at most 8 with one revision and every structured-output
   repair attempt used), versus 1 for Standard RAG.
+
+## Carried forward to later phases
+
+### Required evaluation regression cases (Phase 3)
+
+| Case | Source | Expected behaviour |
+|---|---|---|
+| Under-21 blood-alcohol limit misattributed | Live run, Phase 1B: answer stated "the limit for drivers under 21 is 0.08", citing a passage about drivers over 21; marked `verified` by `llama3.2`, and `gemma3:12b` agreed on re-check | Must not be reported as `verified`; the evaluation must measure verifier precision on this and similar misattributed claims |
+
+### Ingestion follow-up (before quality benchmarks or demos)
+
+Two-column PDFs are extracted by pdfplumber with interleaved columns, which
+degraded retrieval and contributed to the false positive above. Investigate
+column-aware extraction before any affected PDF is used in quality
+benchmarks or a public demonstration.
