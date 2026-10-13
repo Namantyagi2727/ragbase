@@ -23,6 +23,16 @@ env/
 # Streamlit
 .streamlit/secrets.toml
 
+# Local environment / credentials
+.env
+.env.*
+!.env.example
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # OS
 .DS_Store
 Thumbs.db
