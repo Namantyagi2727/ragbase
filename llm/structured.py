@@ -29,6 +29,7 @@ class StructuredResult(Generic[T]):
     value: T | None
     attempts: int
     error: str | None = None
+    backend_error: bool = False      # True when the backend failed, not the output format
     raw_outputs: list[str] = field(default_factory=list)
     llm_results: list[LLMResult] = field(default_factory=list)
 
@@ -89,6 +90,7 @@ def complete_structured(
             llm_result = model.complete(convo, json_schema=json_schema, timeout_s=timeout_s)
         except LLMError as e:
             result.error = f"{type(e).__name__}: {e}"
+            result.backend_error = True
             return result  # backend failure: do not retry blindly
         result.llm_results.append(llm_result)
         result.raw_outputs.append(llm_result.text)
