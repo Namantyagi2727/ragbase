@@ -9,8 +9,8 @@ test results and known limitations.
 |---|---|---|
 | 0 | Repository audit and implementation plan | Done |
 | 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
-| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — in review ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
-| 2 | Optional Prism gateway integration | Not started |
+| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — merged ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
+| 2 | Optional Prism gateway integration | Adapter done; real-gateway run pending — in review ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
 | 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Not started |
 | 4 | Streamlit integration and public demo | Not started |
 | 5 | Documentation and final review | Not started |
@@ -304,6 +304,71 @@ All 186 pass locally; CI runs lint and the unit suite on every pull request.
 - **Cost of agentic mode:** 2 model calls on the simple route, typically 3–5
   on the complex route (at most 8 with one revision and every structured-output
   repair attempt used), versus 1 for Standard RAG.
+
+## Phase 2 — Prism gateway integration
+
+Full details: [docs/PRISM.md](PRISM.md). Prism itself was not modified.
+
+### Implementation
+
+- `llm/openai_compat.py`: `PrismChatModel`, selected with
+  `RAGBASE_LLM_BACKEND=prism`. Direct Ollama stays the default; there is no
+  fallback between backends. Temperature is always sent; structured output
+  uses explicit JSON instructions (Prism drops schema fields) with the
+  existing validation and one repair attempt; the API key is read from the
+  environment and redacted from errors and `repr`.
+- **Provider verification, fail closed:** a response is accepted only if
+  `prism_metadata.provider_used` is in `PRISM_ALLOWED_PROVIDERS` (default
+  `ollama`). Other providers (including Prism's mocks), cache hits (origin not
+  recorded by Prism) and missing metadata raise `ProviderRejectedError` and
+  the text is discarded. Mock content/ID detection is a second check.
+- Typed errors for guardrail blocks (with reason), auth, rate limit, missing
+  route, provider failure, timeout and connection failure.
+- Agent results record per-call backend, inference mode
+  (`local_direct` / `prism_local` / `prism_remote`) and only the gateway
+  fields actually reported (provider, fallback, cost, latency, tokens).
+- The factory keeps the Ollama model name and the Prism virtual model
+  separate, so an Ollama name is never sent to Prism.
+
+### Findings
+
+- **Guardrails block every evidence prompt.** RAGBase's evidence IDs (`E1`,
+  `E2`, …) match Presidio's `US_DRIVER_LICENSE` recognizer at score 0.3, and
+  Prism blocks on any match: 100% of standard-RAG prompts were blocked on the
+  travel-policy fixtures, the driver's manual and the novel corpus. With the
+  IDs rewritten to `E-1` style (measurement only), documents without personal
+  data pass (travel policies 0/6 blocked), but documents mentioning people are
+  still blocked (driver's manual 3/6, novels 29/30). Measured with Prism's
+  own `scan_prompt` run in-process.
+- **Context length.** Prism's upstream request carries no context option;
+  Ollama's default was 4096 tokens on the test machine, the same as RAGBase's
+  direct setting. Planted-fact probes behaved identically on both paths up
+  to ~4,000 tokens; beyond the context size both truncate silently to
+  ~2,050 tokens. RAGBase's default prompts are around 2,000 tokens at most.
+- **Cache hits are always rejected** under the fail-closed rule, so repeating
+  an identical request within Prism's one-hour cache window fails.
+
+### Tests
+
+| Suite | Count |
+|---|---|
+| Unit (incl. 35 Prism adapter tests, 8 mocked-Prism end-to-end tests) | 219 |
+| Integration (real embeddings + reranker) | 4 |
+| Live (local Ollama) | 6 |
+| Live Prism | 3 — **skipped**: no Prism stack running during development |
+
+All 229 non-Prism tests pass. No request was sent to a real Prism server in
+this phase; every Prism request in the tests is mocked HTTP, and guardrail
+results come from Prism's code run in-process.
+
+### Open decisions
+
+1. Evidence-ID format change in RAGBase (unblocks documents without personal
+   data through Prism).
+2. A narrowly scoped Prism guardrail policy for document-grounded clients
+   (needed for documents mentioning people) — a Prism change.
+3. Whether a cache hit can ever be accepted (e.g. if Prism recorded the
+   originating provider in its cache entries — a Prism change).
 
 ## Carried forward to later phases
 
