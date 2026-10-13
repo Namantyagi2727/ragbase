@@ -29,6 +29,7 @@ class StructuredResult(Generic[T]):
     value: T | None
     attempts: int
     error: str | None = None
+    backend_error: bool = False      # True when the backend failed, not the output format
     raw_outputs: list[str] = field(default_factory=list)
     llm_results: list[LLMResult] = field(default_factory=list)
 
@@ -78,6 +79,7 @@ def complete_structured(
     *,
     repair_attempts: int = 1,
     timeout_s: float | None = None,
+    temperature: float | None = None,
 ) -> StructuredResult[T]:
     json_schema = schema.model_json_schema()
     convo: list[Message] = list(messages)
@@ -86,9 +88,12 @@ def complete_structured(
     for attempt in range(1 + repair_attempts):
         result.attempts = attempt + 1
         try:
-            llm_result = model.complete(convo, json_schema=json_schema, timeout_s=timeout_s)
+            llm_result = model.complete(
+                convo, json_schema=json_schema, timeout_s=timeout_s, temperature=temperature
+            )
         except LLMError as e:
             result.error = f"{type(e).__name__}: {e}"
+            result.backend_error = True
             return result  # backend failure: do not retry blindly
         result.llm_results.append(llm_result)
         result.raw_outputs.append(llm_result.text)

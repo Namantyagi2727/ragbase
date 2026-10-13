@@ -8,8 +8,8 @@ test results and known limitations.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repository audit and implementation plan | Done |
-| 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — in review ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
-| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Not started |
+| 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
+| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — in review ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
 | 2 | Optional Prism gateway integration | Not started |
 | 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Not started |
 | 4 | Streamlit integration and public demo | Not started |
@@ -127,3 +127,195 @@ With `llama3.2`, "How many units were sold in the EU?" was planned as
 - **UI fonts** are loaded from Google Fonts, so the interface itself makes
   one external request.
 - **README** still describes the pre-upgrade system; updated in Phase 5.
+
+## Phase 1B — LangGraph agentic engine
+
+### Architecture
+
+```
+plan ──simple──▶ standard ───────────────────────────────▶ finalize
+  └──complex──▶ retrieve ▶ synthesize ▶ verify ──accept──▶ finalize
+                   ▲            ▲          │
+                   └── refine ──┘◀─revise──┘   (≤ max_revisions, time left)
+```
+
+| Component | Kind | Role |
+|---|---|---|
+| Planner | Model decision (structured `QueryPlan`) | Chooses the simple or complex route, writes up to 3 sub-queries, targets documents, flags comparisons |
+| Retrieval tools | Deterministic | `hybrid_search` (validated query, k, known-source filter) and `list_documents`; reuse the Phase 1A retriever and reranker. No filesystem, shell or network tools |
+| Synthesizer | Model generation | Answers from numbered evidence, cites `[E#]`, states conflicts, abstains when unsupported |
+| Verifier | Deterministic checks + model decision (structured `VerifierOutput`) | Citation validity; numbers in each cited claim present in its cited passages; per-claim verdicts from the model; recommends accept / revise with a follow-up search |
+| Refinement | Deterministic control | At most `max_revisions` (default 1) rounds: optional targeted search, then re-synthesis with verifier feedback |
+
+The planner and verifier make distinct model-driven decisions; retrieval is a
+tool layer, not an extra persona. The simple route is the Standard RAG path
+(one search, one answer call).
+
+The engine lives in `agent/` and has no Streamlit dependency;
+`python -m agent "question"` runs it against a built index and prints the
+trace.
+
+### Verification is separate from citation validity
+
+`Verification` records independently:
+
+- `citation_ok` — deterministic (`CitationReport.ok`): cited IDs exist, no invented references.
+- `grounding` — `verified`, `partially_verified`, `unsupported`, `not_verified` or `skipped`.
+- `llm_status` — `completed`, `failed` or `skipped`.
+
+A verifier call that fails, returns invalid JSON, or returns no usable
+verdicts gives `not_verified`; it is never reported as verified. Verdicts
+that reference unknown evidence or non-existent claims are discarded and
+reported. Final status:
+
+| Status | Meaning |
+|---|---|
+| `completed` | Every claim verified, or an abstention confirmed by a check / with no evidence retrieved |
+| `completed_unverified` | Citations valid but verification incomplete or not run (simple route, verifier failure, missing verdicts, unconfirmed absence statements) |
+| `qualified` | Unresolved problems after the allowed revisions; answer carries a visible warning |
+| `failed` / `timeout` | Backend error or time budget exhausted |
+
+### Bounds and failure handling
+
+Three independent limits: `max_revisions`, a per-run time budget (default
+180 s; no revision starts with < 15 s left), and LangGraph's recursion limit.
+Backend errors in planning or synthesis end the run as `failed`; verifier
+errors degrade to `not_verified`. Planner output that fails validation falls
+back to the simple route, and the fallback reason is stored in the result
+and trace.
+
+### Findings from live runs with `llama3.2` and fixes
+
+| Observed | Fix |
+|---|---|
+| Verifier omitted claim verdicts (correctly reported as not verified, but useless) | Verdicts required (≥1) in the schema, which Ollama's constrained decoding enforces |
+| Verifier named claims by number instead of text | Verdicts reference `claim_number`, mapped back to the answer's claims in code |
+| Planner sent simple questions down the complex route and put file names inside queries | Planner examples, "most questions are simple" guidance, temperature 0, file-name prefixes stripped from queries |
+| Years from source file names flagged as unsupported numbers | Numbers in a cited passage's source name count as available |
+| A partial answer containing "the documents do not mention X" was treated as a full abstention, skipping verification | An answer is an abstention only if it cites nothing; absence statements are excluded from claim verification and reported |
+| Two trace events shared one step number | Unique step numbering |
+
+Planner routing on seven test questions was identical across three repeated
+runs (temperature 0): factual lookups → simple; comparisons and multi-part
+questions → complex.
+
+### Live examples (fixture corpus, `llama3.2`, after fixes)
+
+| Question type | Route | LLM calls | Searches | Status | Time |
+|---|---|---|---|---|---|
+| Single fact | simple | 2 | 1 | completed_unverified | 1.0 s |
+| Compare two policy versions | complex (per-document searches) | 3 | 3 | completed | 5.4 s |
+| Conflicting deadlines across versions | simple | 2 | 1 | completed_unverified | 0.9 s |
+| Two-part question | complex | 3 | 1 | completed | 2.3 s |
+| Unanswerable | simple | 2 | 1 | completed (abstained) | 0.6 s |
+
+Standard RAG produced equivalent answers on the simple questions in about
+the same time. On the comparison it combined both years' figures under a
+single citation, whereas the agent cited each policy separately. This is
+an observation from one run, not a measured improvement; Phase 3 will
+compare the modes on a labelled dataset.
+
+On a real two-column PDF (driver's manual), a multi-part question used the
+refinement loop: the verifier's follow-up search found the passage with the
+under-21 limit, but the 3B model's revised answer still contradicted itself,
+and the run ended `qualified` with the problem claim listed.
+
+### Verification-correctness patch (review follow-up)
+
+Review found that one accepted verdict could mark a multi-claim answer
+`verified`, that absence statements bypassed verification while the answer
+could still be `verified`, and that any abstention phrase counted as a
+correct outcome.
+
+- **Complete coverage.** `verified` now requires every checkable claim to
+  have exactly one valid verdict, and each "supported" verdict must include
+  evidence the claim itself cites. Missing, duplicate, invalid or
+  unattributable verdicts, uncited claims, and claims beyond the
+  verification limit (12) give a new grounding value, `incomplete`.
+  Uncited substantive claims also trigger the existing bounded revision.
+- **Absence statements** ("the documents do not specify X") trigger the
+  existing follow-up search (one round, no new loop). If they remain, the
+  result stays `incomplete`, and the answer carries a note that they reflect
+  the retrieved passages (and the targeted search, if it ran), not the
+  whole collection.
+- **Abstentions** are labelled `no_evidence`, `confirmed` (the verifier
+  checked the retrieved evidence and found no answer), `evidence_may_answer`
+  (triggers a revision; `qualified` if none remains), `not_checked` (simple
+  route) or `failed`. Only `no_evidence` and `confirmed` count as
+  `completed`. On the complex route the check uses the verifier's slot, so
+  an abstention with retrieved evidence now costs one model call that
+  previously was skipped.
+
+17 scripted regression tests cover these rules, including a reproduction
+of the driver's-manual failure (absence claim → targeted search → passage
+found → re-verified).
+
+**Live check after the patch** (`llama3.2`, two runs per question, fixture
+corpus plus the driver's manual): no run exceeded one revision or five model
+calls. Statuses: simple questions `completed_unverified` (by design); the
+two-part question `verified` both runs; the comparison `qualified` both runs
+— in the inspected run the answer wrongly said the 2023 policy had no hotel
+rule (correctly caught as an unconfirmed absence statement), but the
+verifier also marked a correct 2024 claim unsupported, a model false
+negative.
+
+**Verifier false positive found.** Across 8 further driver's-manual runs, one
+answer was marked `verified` although it was wrong: it stated the under-21
+limit is 0.08, citing a passage about drivers *over* 21. All deterministic
+checks pass on that claim (valid citation, number present in the cited
+text), and both `llama3.2` and `gemma3:12b` judged it supported on every
+re-check — the passage's two-column extraction interleaves the "over 21"
+text with the DWI lines. `verified` therefore means "passed the
+deterministic checks and the model's claim check", not "correct".
+
+A final deterministic correction: an extra malformed verdict (unknown
+evidence ID or non-existent claim number) alongside otherwise complete
+coverage previously still allowed `verified`; it now yields `incomplete`.
+
+### Tests
+
+| Suite | Count |
+|---|---|
+| Unit (no models) | 176 |
+| Integration (real embeddings + reranker) | 4 |
+| Live (local Ollama) | 6 |
+
+All 186 pass locally; CI runs lint and the unit suite on every pull request.
+
+### Known limitations after Phase 1B
+
+- **Model verification can be wrong in both directions.** The verifier has
+  produced a false positive (wrong answer marked `verified`) and false
+  negatives (correct claims marked unsupported). Deterministic checks catch
+  invented citations, missing coverage and numbers absent from cited text,
+  but not semantic misreadings. Measuring verifier precision is Phase 3
+  work. *(Follow-up: model quality.)*
+- **Absence statements cannot be confirmed.** They are searched for once and
+  otherwise reported as unconfirmed; the system never claims information
+  is absent from the whole collection.
+- **Simple-route answers are never claim-verified** (by design, to keep
+  simple questions to two model calls); they are reported as
+  `completed_unverified`.
+- **Multi-column PDFs** are extracted with interleaved columns by
+  pdfplumber, which degrades retrieval and contributed to the verifier false
+  positive above. *(Follow-up: ingestion.)*
+- **No UI integration yet** — Agentic mode is available through code and
+  the CLI; the Streamlit mode switch is Phase 4.
+- **Cost of agentic mode:** 2 model calls on the simple route, typically 3–5
+  on the complex route (at most 8 with one revision and every structured-output
+  repair attempt used), versus 1 for Standard RAG.
+
+## Carried forward to later phases
+
+### Required evaluation regression cases (Phase 3)
+
+| Case | Source | Expected behaviour |
+|---|---|---|
+| Under-21 blood-alcohol limit misattributed | Live run, Phase 1B: answer stated "the limit for drivers under 21 is 0.08", citing a passage about drivers over 21; marked `verified` by `llama3.2`, and `gemma3:12b` agreed on re-check | Must not be reported as `verified`; the evaluation must measure verifier precision on this and similar misattributed claims |
+
+### Ingestion follow-up (before quality benchmarks or demos)
+
+Two-column PDFs are extracted by pdfplumber with interleaved columns, which
+degraded retrieval and contributed to the false positive above. Investigate
+column-aware extraction before any affected PDF is used in quality
+benchmarks or a public demonstration.

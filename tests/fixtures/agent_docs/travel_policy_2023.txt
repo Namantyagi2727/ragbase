@@ -1,0 +1,9 @@
+Northwind Analytics — Travel and Expense Policy (2023 edition)
+
+Meals. Employees travelling on company business may claim a daily meal allowance of 45 dollars. Alcohol is not reimbursable.
+
+Lodging. Hotel stays up to 200 dollars per night are approved automatically. Stays above 200 dollars per night require written approval from the employee's manager before booking.
+
+Air travel. Economy class is required for all flights under six hours. Business class may be booked for flights of six hours or longer.
+
+Submitting expenses. Expense reports must be submitted within 30 days of the end of the trip, with itemised receipts for any single expense above 25 dollars.

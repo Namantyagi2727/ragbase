@@ -61,6 +61,16 @@ RRF_K: int = 60              # reciprocal-rank-fusion damping constant
 RERANKING_ENABLED: bool = True
 RERANK_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
+# Agentic mode (LangGraph)
+AGENT_MAX_REVISIONS: int = _env_int("RAGBASE_AGENT_MAX_REVISIONS", 1)   # refinement rounds after verification
+AGENT_TIME_BUDGET_S: float = _env_float("RAGBASE_AGENT_TIME_BUDGET_S", 180.0)
+AGENT_MAX_SUBQUERIES: int = 3
+AGENT_K_PER_QUERY: int = 4
+AGENT_MAX_EVIDENCE: int = 12
+AGENT_MAX_COMPARE_DOCS: int = 5
+# Optional separate model for the verifier (e.g. a larger one); empty = same as OLLAMA_MODEL
+AGENT_VERIFIER_MODEL: str = _env_str("RAGBASE_AGENT_VERIFIER_MODEL", "")
+
 # Tabular ingestion
 ROW_CHUNK_SIZE: int = 100    # rows per block for CSV/Excel
 
