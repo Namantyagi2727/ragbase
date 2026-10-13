@@ -14,11 +14,16 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import config
-from agent.prompts import planner_messages, synthesis_messages, verifier_messages
-from agent.schemas import QueryPlan, VerifierOutput
+from agent.prompts import (
+    abstention_check_messages,
+    planner_messages,
+    synthesis_messages,
+    verifier_messages,
+)
+from agent.schemas import AbstentionCheck, QueryPlan, VerifierOutput
 from agent.state import AgentState, TraceEvent
 from agent.tools import RetrievalTools, ToolError
-from agent.verifier import assess, revision_feedback
+from agent.verifier import assess, assess_abstention, revision_feedback
 from citations import (
     ABSTAIN_TEXT,
     build_evidence,
@@ -41,6 +46,7 @@ class AgentSettings:
     max_evidence: int = config.AGENT_MAX_EVIDENCE
     max_compare_docs: int = config.AGENT_MAX_COMPARE_DOCS
     verify_with_llm: bool = True
+    max_verified_claims: int = 12
     min_time_for_revision_s: float = 15.0
 
 
@@ -72,6 +78,13 @@ def _clean_query(query: str, documents: list[str]) -> str:
             if q.lower().startswith(prefix.lower()) and q[len(prefix):len(prefix) + 1] in (":", " "):
                 q = q[len(prefix) + 1:].strip()
     return " ".join(q.split())
+
+
+def _partition_claims(answer: str) -> tuple[list[str], list[str]]:
+    """(checkable claims, absence statements) of an answer."""
+    claims = split_claims(answer)
+    absence = [c for c in claims if is_absence_statement(c)]
+    return [c for c in claims if c not in absence], absence
 
 
 class AgentNodes:
@@ -182,7 +195,15 @@ class AgentNodes:
             return {"retrieval_calls": 1, "evidence": evidence, **self._failed(state, "standard", e)}
         answer = result.text.strip()
         report = validate_citations(answer, evidence)
-        verification = assess(answer, evidence, report, None, llm_skipped=True)
+        if report.abstained:
+            verification = assess_abstention(evidence, report, None, attempted=False)
+        else:
+            checkable, absence = _partition_claims(answer)
+            verification = assess(
+                answer, evidence, report, None, llm_skipped=True,
+                claims=checkable[: self.s.max_verified_claims], total_checkable=len(checkable),
+                absence_claims=absence,
+            )
         return {
             **_accounting([result]),
             "retrieval_calls": 1,
@@ -283,29 +304,55 @@ class AgentNodes:
     def verify(self, state: AgentState) -> dict:
         answer, evidence, report = state["answer"], state.get("evidence", []), state["citations"]
         update: dict = {}
-        if report.abstained or not self.s.verify_with_llm:
-            v = assess(answer, evidence, report, None, llm_skipped=True)
-        elif self._remaining(state) <= 0:
-            v = assess(answer, evidence, report, None, llm_error="time budget exhausted")
-        else:
-            all_claims = split_claims(answer)
-            checkable = [c for c in all_claims if not is_absence_statement(c)]
-            claims, absence = checkable[:12], len(all_claims) - len(checkable)
-            res = complete_structured(
-                self.deps.verifier, verifier_messages(state["question"], evidence, claims),
-                VerifierOutput, timeout_s=self._remaining(state), temperature=0.0,
-            )
-            update.update(_accounting(res.llm_results))
-            v = assess(answer, evidence, report, res.value, llm_error=res.error, claims=claims)
-            if absence:
-                v.issues.append(f"{absence} statement(s) about missing information were not claim-verified")
+        out_of_time = self._remaining(state) <= 0
 
-        if v.llm_status == "failed":
+        if report.abstained:
+            if not evidence or not self.s.verify_with_llm:
+                v = assess_abstention(evidence, report, None, attempted=False)
+            elif out_of_time:
+                v = assess_abstention(evidence, report, None, attempted=True, llm_error="time budget exhausted")
+            else:
+                res = complete_structured(
+                    self.deps.verifier, abstention_check_messages(state["question"], evidence),
+                    AbstentionCheck, timeout_s=self._remaining(state), temperature=0.0,
+                )
+                update.update(_accounting(res.llm_results))
+                v = assess_abstention(evidence, report, res.value, attempted=True, llm_error=res.error)
+        else:
+            checkable, absence = _partition_claims(answer)
+            claims = checkable[: self.s.max_verified_claims]
+            common = dict(
+                claims=claims, total_checkable=len(checkable), absence_claims=absence,
+                absence_searched=state.get("absence_searched", False),
+            )
+            if not self.s.verify_with_llm or not claims:
+                v = assess(answer, evidence, report, None, llm_skipped=True, **common)
+            elif out_of_time:
+                v = assess(answer, evidence, report, None, llm_error="time budget exhausted", **common)
+            else:
+                res = complete_structured(
+                    self.deps.verifier, verifier_messages(state["question"], evidence, claims),
+                    VerifierOutput, timeout_s=self._remaining(state), temperature=0.0,
+                )
+                update.update(_accounting(res.llm_results))
+                v = assess(answer, evidence, report, res.value, llm_error=res.error, **common)
+
+        if v.grounding == "skipped":
+            summary = {
+                "no_evidence": "Abstained; no evidence was retrieved",
+                "confirmed": "Abstention checked: retrieved evidence does not answer the question",
+                "evidence_may_answer": "Abstention challenged: retrieved evidence may answer the question",
+                "not_checked": "Abstained; not checked against the retrieved evidence",
+                "failed": "Abstention check failed",
+            }[v.abstention_check]
+        elif v.llm_status == "failed":
             summary = "Claim verification failed; answer is not verified"
         elif v.grounding == "verified":
-            summary = "All claims supported by cited evidence"
-        elif v.grounding == "skipped":
-            summary = "Answer abstained; nothing to verify"
+            summary = f"All {v.claims_checked} claim(s) supported by their cited evidence"
+        elif v.grounding == "incomplete":
+            summary = f"Verification incomplete: {v.claims_verified} of {v.claims_checked} claim(s) verified" + (
+                f", {len(v.absence_claims)} missing-information statement(s) unconfirmed" if v.absence_claims else ""
+            )
         else:
             summary = f"Verification found problems ({v.grounding.replace('_', ' ')})"
         update.update(
@@ -313,8 +360,10 @@ class AgentNodes:
             trace=[self._event(
                 state, "verify", summary,
                 citation_ok=v.citation_ok, grounding=v.grounding, llm_status=v.llm_status,
-                decision=v.decision, unsupported=len(v.unsupported_claims),
-                numeric_mismatches=len(v.numeric_mismatches), followup_query=v.followup_query,
+                decision=v.decision, claims_checked=v.claims_checked, claims_verified=v.claims_verified,
+                unsupported=len(v.unsupported_claims), unverified=len(v.unverified_claims),
+                absence=len(v.absence_claims), numeric_mismatches=len(v.numeric_mismatches),
+                abstention_check=v.abstention_check, followup_query=v.followup_query,
             )],
         )
         return update
@@ -323,8 +372,10 @@ class AgentNodes:
         v = state["verification"]
         count = state.get("revision_count", 0) + 1
         pending = [{"query": v.followup_query, "sources": []}] if v.followup_query else []
+        absence_round = bool(pending and v.absence_claims and not v.absence_searched)
         return {
             "revision_count": count,
+            "absence_searched": state.get("absence_searched", False) or absence_round,
             "revision_feedback": revision_feedback(v),
             "pending_queries": pending,
             "trace": [self._event(
@@ -348,20 +399,40 @@ class AgentNodes:
             pass
         elif v is None:
             status = "completed_unverified"
-        elif v.decision == "accept" and v.grounding in ("verified", "skipped"):
+        elif v.grounding == "skipped":   # full abstention
+            if v.abstention_check in ("no_evidence", "confirmed"):
+                status = "completed"
+            elif v.abstention_check == "evidence_may_answer":
+                status = "qualified"
+            else:
+                status = "completed_unverified"
+        elif v.decision == "accept" and v.grounding == "verified":
             status = "completed"
-        elif v.citation_ok and v.grounding == "not_verified" and not v.numeric_mismatches:
+        elif (
+            v.citation_ok
+            and v.grounding in ("not_verified", "incomplete")
+            and not v.numeric_mismatches
+            and not v.unsupported_claims
+        ):
             status = "completed_unverified"
         else:
             status = "qualified"
 
         if status == "qualified":
             problems = len(v.unsupported_claims) + len(v.numeric_mismatches) if v else 0
-            note = (
-                f"{problems} statement(s) could not be confirmed against the documents"
-                if problems else "the answer's citations or grounding could not be fully confirmed"
-            )
+            if v is not None and v.abstention_check == "evidence_may_answer":
+                note = "the retrieved passages may contain an answer to this question"
+            elif problems:
+                note = f"{problems} statement(s) could not be confirmed against the documents"
+            else:
+                note = "the answer's citations or grounding could not be fully confirmed"
             answer = f"{answer}\n\n> ⚠ Verification: {note}."
+        if v is not None and v.absence_claims and status not in ("failed", "timeout"):
+            searched = " and one targeted search" if v.absence_searched else ""
+            answer = (
+                f"{answer}\n\n> Note: statements that information is missing are based on the "
+                f"passages retrieved{searched}; they do not establish that the documents lack it."
+            )
 
         return {
             "status": status,

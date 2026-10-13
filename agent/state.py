@@ -22,7 +22,23 @@ Status = Literal[
     "failed",               # backend error; no reliable answer
     "timeout",              # time budget exhausted
 ]
-Grounding = Literal["verified", "partially_verified", "unsupported", "not_verified", "skipped"]
+Grounding = Literal[
+    "verified",            # every checkable claim has exactly one valid, attributable "supported" verdict
+    "partially_verified",  # some claim judged partially supported
+    "unsupported",         # some claim unsupported, or a number absent from its cited evidence
+    "incomplete",          # no contradictions found, but coverage is incomplete (missing/duplicate
+                           # verdicts, uncited claims, claims over the limit, unconfirmed absence statements)
+    "not_verified",        # claim verification did not run successfully
+    "skipped",             # full abstention: see Verification.abstention_check
+]
+AbstentionCheck = Literal[
+    "not_applicable",      # the answer is not an abstention
+    "no_evidence",         # nothing was retrieved, so there was nothing the answer could use
+    "confirmed",           # verifier judged the retrieved evidence does not answer the question
+    "evidence_may_answer", # verifier pointed to retrieved evidence that may answer it
+    "not_checked",         # evidence was retrieved but no check ran (e.g. simple route)
+    "failed",              # the check was attempted and failed
+]
 
 
 class TraceEvent(TypedDict):
@@ -43,9 +59,20 @@ class Verification:
     decision: Literal["accept", "revise", "finalize"]
     unsupported_claims: list[str] = field(default_factory=list)
     numeric_mismatches: list[str] = field(default_factory=list)
+    unverified_claims: list[str] = field(default_factory=list)  # no valid verdict / not attributable
+    absence_claims: list[str] = field(default_factory=list)     # "the documents do not state X"
+    absence_searched: bool = False                              # a targeted search for them has run
+    claims_checked: int = 0
+    claims_verified: int = 0
+    abstention_check: AbstentionCheck = "not_applicable"
     issues: list[str] = field(default_factory=list)
     followup_query: Optional[str] = None
     llm_error: Optional[str] = None
+
+    @property
+    def coverage(self) -> float:
+        """Fraction of checkable claims with a valid, attributable "supported" verdict."""
+        return self.claims_verified / self.claims_checked if self.claims_checked else 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +82,13 @@ class Verification:
             "decision": self.decision,
             "unsupported_claims": self.unsupported_claims,
             "numeric_mismatches": self.numeric_mismatches,
+            "unverified_claims": self.unverified_claims,
+            "absence_claims": self.absence_claims,
+            "absence_searched": self.absence_searched,
+            "claims_checked": self.claims_checked,
+            "claims_verified": self.claims_verified,
+            "coverage": round(self.coverage, 3),
+            "abstention_check": self.abstention_check,
             "issues": self.issues,
             "followup_query": self.followup_query,
             "llm_error": self.llm_error,
@@ -81,6 +115,7 @@ class AgentState(TypedDict, total=False):
     verification: Verification
     revision_count: int
     revision_feedback: Optional[str]
+    absence_searched: bool                  # a targeted search for "missing information" claims ran
 
     # termination
     status: Status

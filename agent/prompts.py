@@ -82,3 +82,17 @@ Then recommend:
             f"Question: {question}\n\nClaims to check:\n{numbered}"
         )},
     ]
+
+
+def abstention_check_messages(question: str, evidence: list[Evidence]) -> list:
+    return [
+        {"role": "system", "content": f"""An assistant said it could not answer a question from the evidence.
+Check that decision using ONLY the evidence text.
+
+- "yes": the evidence answers the question.
+- "partially": the evidence answers part of it.
+- "no": the evidence does not answer it.
+For "yes" or "partially", list the evidence IDs that contain the answer.
+{UNTRUSTED_NOTE}"""},
+        {"role": "user", "content": f"Evidence documents:\n{format_evidence(evidence)}\n\nQuestion: {question}"},
+    ]

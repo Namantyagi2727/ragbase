@@ -280,8 +280,9 @@ def test_verdict_for_nonexistent_claim_number_is_ignored():
              "recommendation": "accept"}
     model = RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[bogus])
     result, _ = _run(model)
-    assert result.verification.grounding == "not_verified"
+    assert result.verification.grounding == "incomplete"
     assert any("claim 9" in i for i in result.verification.issues)
+    assert result.status == "completed_unverified"
 
 
 def test_absence_statements_are_not_sent_for_claim_verification():
@@ -295,7 +296,8 @@ def test_absence_statements_are_not_sent_for_claim_verification():
     answer = ("In 2023 the meal allowance was 45 dollars [E1]. "
               "The evidence does not provide the allowance for interns.")
     model = RoleModel(planner=[COMPLEX], synth=[answer], verifier=[verifier])
-    result, _ = _run(model)
+    result, _ = _run(model, max_revisions=0)
     assert "interns" not in seen[0]
-    assert result.verification.grounding == "verified"
-    assert any("missing information were not claim-verified" in i for i in result.verification.issues)
+    assert result.verification.grounding == "incomplete"  # never fully verified
+    assert result.status == "completed_unverified"
+    assert "do not establish that the documents lack it" in result.answer

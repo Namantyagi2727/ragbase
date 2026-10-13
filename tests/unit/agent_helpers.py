@@ -12,6 +12,7 @@ ROLE_MARKERS = {
     "planner": "You plan how to answer",
     "synth": "You answer questions using ONLY",
     "verifier": "You check whether an answer",
+    "abscheck": "An assistant said it could not answer",
     "standard": "You are a document Q&A assistant",
 }
 

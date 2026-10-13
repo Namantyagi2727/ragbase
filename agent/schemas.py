@@ -46,3 +46,12 @@ class VerifierOutput(BaseModel):
     missing_information: Optional[str] = Field(default=None, max_length=300)
     followup_query: Optional[str] = Field(default=None, max_length=300)
     recommendation: Literal["accept", "revise", "insufficient_evidence"]
+
+
+class AbstentionCheck(BaseModel):
+    """Verifier decision for an abstaining answer: does the retrieved evidence answer it?"""
+
+    model_config = ConfigDict(extra="ignore")
+    answerable: Literal["yes", "partially", "no"]
+    evidence_ids: list[str] = Field(default_factory=list, max_length=10)
+    note: str = Field(default="", max_length=300)

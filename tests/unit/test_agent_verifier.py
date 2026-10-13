@@ -4,7 +4,7 @@ import pytest
 
 from agent.schemas import ClaimVerdict, VerifierOutput
 from agent.verifier import assess, numbers_in, numeric_mismatches, revision_feedback
-from citations import Evidence, validate_citations
+from citations import Evidence, split_claims, validate_citations
 
 EV = [
     Evidence("E1", "a", "p.txt", "txt", "The limit is .08 percent for adults and 1,200 dollars fines."),
@@ -40,13 +40,13 @@ def test_uncited_claims_are_not_numerically_checked():
 def _assess(answer, verdicts=None, recommendation="accept", **kw):
     out = None if verdicts is None else VerifierOutput(
         verdicts=[ClaimVerdict(**v) for v in verdicts], recommendation=recommendation, **kw)
-    return assess(answer, EV, validate_citations(answer, EV), out)
+    return assess(answer, EV, validate_citations(answer, EV), out, claims=split_claims(answer))
 
 
 def test_verdicts_citing_unknown_evidence_are_ignored_and_reported():
     v = _assess("The adult limit is 0.08 percent [E1].",
                 [{"claim_number": 1, "status": "supported", "evidence_ids": ["E7"]}])
-    assert v.grounding == "not_verified"
+    assert v.grounding == "incomplete" and v.claims_verified == 0
     assert any("unknown evidence E7" in i for i in v.issues)
 
 
