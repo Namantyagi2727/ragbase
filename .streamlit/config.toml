@@ -8,3 +8,6 @@ font                  = "sans serif"
 
 [server]
 headless = false
+
+# Keep in sync with RAGBASE_MAX_UPLOAD_MB (config.py); Streamlit enforces this first.
+maxUploadSize = 50

@@ -4,9 +4,9 @@ app.py — Streamlit UI for RAGBase.
 Run with:  streamlit run app.py
 """
 
-import os
-import io
+import html
 import logging
+import os
 from datetime import datetime
 
 import streamlit as st
@@ -14,6 +14,9 @@ import streamlit as st
 import config
 import ingest
 import retriever as ret
+import tabular
+from citations import resolve_citations
+from llm import LLMError, get_chat_model
 
 log = logging.getLogger(__name__)
 
@@ -663,6 +666,22 @@ hr {
     line-height: 1.4;
     font-style: italic;
 }
+.rb-source.uncited { border-left-color: var(--border-mid); opacity: 0.7; }
+.rb-eid {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--amber);
+    background: var(--amber-dim);
+    border: 1px solid var(--amber-border);
+    padding: 0.02rem 0.35rem;
+    border-radius: 2px;
+}
+.rb-cite-warn {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--amber);
+    margin: 0.2rem 0 0.4rem;
+}
 
 /* ================================================================
    HIDE STREAMLIT CHROME
@@ -697,6 +716,8 @@ if "cfg_top_k" not in st.session_state:
     st.session_state.cfg_top_k = config.TOP_K
 if "cfg_reranking" not in st.session_state:
     st.session_state.cfg_reranking = config.RERANKING_ENABLED
+if "load_error" not in st.session_state:
+    st.session_state.load_error = None
 
 
 # ---------------------------------------------------------------------------
@@ -713,25 +734,61 @@ def _load_retriever(index_dir, embed_model, top_k, reranking):
     )
 
 
+def _activate_index():
+    """(Re)load the retriever and chain; the index manifest decides the embedding model."""
+    manifest = ingest.read_manifest(config.INDEX_DIR)
+    if manifest.get("embed_model"):
+        st.session_state.cfg_embed_model = manifest["embed_model"]
+    retriever_obj = _load_retriever(
+        config.INDEX_DIR,
+        st.session_state.cfg_embed_model,
+        st.session_state.cfg_top_k,
+        st.session_state.cfg_reranking,
+    )
+    st.session_state.rag_chain = ret.build_rag_chain(
+        retriever_obj, st.session_state.cfg_ollama_model
+    )
+    st.session_state.index_built = True
+    base = getattr(retriever_obj, "base_retriever", retriever_obj)
+    st.session_state.chunk_count = manifest.get("chunk_count") or len(base.chunks_meta)
+
+
 def _try_autoload():
     idx_path = os.path.join(config.INDEX_DIR, "index.faiss")
     if os.path.exists(idx_path) and not st.session_state.index_built:
         try:
-            retriever_obj = _load_retriever(
-                config.INDEX_DIR,
-                st.session_state.cfg_embed_model,
-                st.session_state.cfg_top_k,
-                st.session_state.cfg_reranking,
-            )
-            st.session_state.rag_chain = ret.build_rag_chain(
-                retriever_obj, st.session_state.cfg_ollama_model
-            )
-            st.session_state.index_built = True
-        except Exception:
-            pass
+            _activate_index()
+            st.session_state.load_error = None
+        except Exception as e:
+            log.exception("Failed to load existing index")
+            st.session_state.load_error = f"Existing index could not be loaded ({type(e).__name__})."
 
 
 _try_autoload()
+
+
+def _render_sources(sources: list, warnings: list) -> None:
+    """Show cited evidence first, then retrieved-but-uncited chunks. All text is escaped."""
+    for w in warnings:
+        st.markdown(f'<div class="rb-cite-warn">⚠ {html.escape(w)}</div>', unsafe_allow_html=True)
+    if not sources:
+        return
+    cited = sum(1 for s in sources if s.get("cited"))
+    label = f"◈  {cited} cited · {len(sources)} retrieved"
+    with st.expander(label):
+        for s in sources:
+            loc_html = f'<div class="rb-source-loc">@ {html.escape(s["loc"])}</div>' if s["loc"] else ""
+            eid_html = f'<span class="rb-eid">{html.escape(s["eid"])}</span>' if s.get("cited") else ""
+            st.markdown(
+                f'<div class="rb-source{"" if s.get("cited") else " uncited"}">'
+                f'<div class="rb-source-path">'
+                f'<i class="rb-source-icon">◈</i>{eid_html} {html.escape(s["filename"])}'
+                f'</div>'
+                f'{loc_html}'
+                f'<div class="rb-source-snippet">{html.escape(s["snippet"])}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -764,11 +821,20 @@ with st.sidebar:
     if st.button("⬡  Build Index", type="primary", use_container_width=True):
         if not uploaded_files:
             st.warning("Upload at least one document first.")
+        elif len(uploaded_files) > config.MAX_UPLOAD_FILES:
+            st.warning(f"Upload at most {config.MAX_UPLOAD_FILES} files per build.")
         else:
             os.makedirs(config.DOCS_DIR, exist_ok=True)
+            rejected = []
             for uf in uploaded_files:
-                dest = os.path.join(config.DOCS_DIR, uf.name)
-                with open(dest, "wb") as fh:
+                name = ingest.safe_filename(uf.name)
+                if name is None:
+                    rejected.append((uf.name, "unsupported or unsafe file name"))
+                    continue
+                if uf.size > config.MAX_UPLOAD_MB * 1024 * 1024:
+                    rejected.append((uf.name, f"larger than {config.MAX_UPLOAD_MB} MB"))
+                    continue
+                with open(os.path.join(config.DOCS_DIR, name), "wb") as fh:
                     fh.write(uf.getbuffer())
 
             progress_bar = st.progress(0.0, text="Initialising…")
@@ -777,7 +843,7 @@ with st.sidebar:
                 progress_bar.progress(frac, text=msg)
 
             with st.spinner("Indexing…"):
-                n = ingest.main(
+                report = ingest.ingest_documents(
                     ingest_dir=config.DOCS_DIR,
                     chunk_size=st.session_state.cfg_chunk_size,
                     chunk_overlap=st.session_state.cfg_chunk_overlap,
@@ -785,21 +851,22 @@ with st.sidebar:
                     index_dir=config.INDEX_DIR,
                     progress_fn=_progress,
                 )
-
-            _load_retriever.clear()
-            retriever_obj = _load_retriever(
-                config.INDEX_DIR,
-                st.session_state.cfg_embed_model,
-                st.session_state.cfg_top_k,
-                st.session_state.cfg_reranking,
-            )
-            st.session_state.rag_chain = ret.build_rag_chain(
-                retriever_obj, st.session_state.cfg_ollama_model
-            )
-            st.session_state.index_built = True
-            st.session_state.chunk_count = n
             progress_bar.empty()
-            st.success(f"✓  {n} chunks from {len(uploaded_files)} file(s)")
+
+            if report.chunks:
+                _load_retriever.clear()
+                _activate_index()
+                st.session_state.load_error = None
+                st.success(f"✓  {report.chunks} chunks from {len(report.files_indexed)} file(s)")
+            else:
+                st.error("No text could be indexed from the uploaded files.")
+            for fn, reason in rejected + report.skipped:
+                st.warning(f"Skipped {fn}: {reason}")
+            for w in report.warnings:
+                st.info(w)
+
+    if st.session_state.load_error:
+        st.error(st.session_state.load_error)
 
     if st.session_state.index_built:
         st.metric("Indexed Chunks", st.session_state.chunk_count)
@@ -809,12 +876,13 @@ with st.sidebar:
     # Configuration
     st.markdown('<div class="rb-label">Configuration</div>', unsafe_allow_html=True)
     with st.expander("Model & Retrieval Settings"):
+        embed_options = ["all-MiniLM-L6-v2", "BAAI/bge-small-en-v1.5", "multi-qa-MiniLM-L6-cos-v1"]
+        if st.session_state.cfg_embed_model not in embed_options:
+            embed_options.append(st.session_state.cfg_embed_model)
         st.session_state.cfg_embed_model = st.selectbox(
             "Embedding Model",
-            ["all-MiniLM-L6-v2", "BAAI/bge-small-en-v1.5", "multi-qa-MiniLM-L6-cos-v1"],
-            index=["all-MiniLM-L6-v2", "BAAI/bge-small-en-v1.5", "multi-qa-MiniLM-L6-cos-v1"].index(
-                st.session_state.cfg_embed_model
-            ),
+            embed_options,
+            index=embed_options.index(st.session_state.cfg_embed_model),
         )
         st.session_state.cfg_ollama_model = st.selectbox(
             "LLM  (Ollama)",
@@ -840,18 +908,15 @@ with st.sidebar:
             value=st.session_state.cfg_reranking,
         )
 
+        st.caption("Embedding model and chunking apply on the next Build Index.")
+
         if st.button("Apply & Reload", use_container_width=True):
             if st.session_state.index_built:
+                built_with = ingest.read_manifest(config.INDEX_DIR).get("embed_model")
+                if built_with and built_with != st.session_state.cfg_embed_model:
+                    st.info(f"Index was built with {built_with}; rebuild to switch embedding model.")
                 _load_retriever.clear()
-                retriever_obj = _load_retriever(
-                    config.INDEX_DIR,
-                    st.session_state.cfg_embed_model,
-                    st.session_state.cfg_top_k,
-                    st.session_state.cfg_reranking,
-                )
-                st.session_state.rag_chain = ret.build_rag_chain(
-                    retriever_obj, st.session_state.cfg_ollama_model
-                )
+                _activate_index()
                 st.success("✓  Retriever reloaded")
             else:
                 st.info("Build an index first.")
@@ -923,21 +988,34 @@ st.divider()
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        sources = msg.get("sources", [])
-        if sources:
-            with st.expander(f"◈  {len(sources)} source chunk{'s' if len(sources) != 1 else ''}"):
-                for s in sources:
-                    loc_html = f'<div class="rb-source-loc">@ {s["loc"]}</div>' if s["loc"] else ""
-                    st.markdown(
-                        f'<div class="rb-source">'
-                        f'<div class="rb-source-path">'
-                        f'<i class="rb-source-icon">◈</i>{s["filename"]}'
-                        f'</div>'
-                        f'{loc_html}'
-                        f'<div class="rb-source-snippet">{s["snippet"]}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
+        _render_sources(msg.get("sources", []), msg.get("citation_warnings", []))
+
+
+def _sources_from_result(result: dict) -> tuple[list, list]:
+    """Cited evidence first (with E# IDs), then retrieved chunks the answer did not cite."""
+    report = result["citations"]
+    cited = resolve_citations(report, result["evidence"])
+    cited_ids = {e.chunk_id for e in cited}
+    sources = [
+        {"eid": e.eid, "filename": e.source, "loc": e.loc,
+         "snippet": e.text[:200].replace("\n", " "), "cited": True}
+        for e in cited
+    ] + [
+        {"eid": e.eid, "filename": e.source, "loc": e.loc,
+         "snippet": e.text[:200].replace("\n", " "), "cited": False}
+        for e in result["evidence"] if e.chunk_id not in cited_ids
+    ]
+    warnings = []
+    if report.invalid_ids:
+        warnings.append(
+            f"Answer cites evidence that was not retrieved: {', '.join(report.invalid_ids)}"
+        )
+    if report.non_evidence_citations:
+        warnings.append("Answer contains references that are not evidence IDs; they may be invented.")
+    if not report.abstained and not report.valid_ids:
+        warnings.append("Answer has no citations to the retrieved evidence.")
+    return sources, warnings
+
 
 # Chat input
 if prompt := st.chat_input("Query your documents…"):
@@ -956,59 +1034,24 @@ if prompt := st.chat_input("Query your documents…"):
         st.stop()
 
     with st.chat_message("assistant"):
-        is_tab, dfs = ret.is_tabular_question(prompt, config.DOCS_DIR)
-
-        if is_tab:
-            with st.spinner("Running data analysis…"):
-                answer = ret.answer_tabular(
-                    prompt, dfs, st.session_state.cfg_ollama_model
-                )
-            st.markdown(answer)
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": answer,
-                "sources": [],
-            })
+        tables = tabular.load_tables(config.DOCS_DIR) if config.TABULAR_QA_ENABLED else []
+        message = {"role": "assistant", "content": "", "sources": [], "citation_warnings": []}
+        try:
+            if tabular.route_to_tabular(prompt, tables):
+                with st.spinner("Running data analysis…"):
+                    response = tabular.answer_tabular_question(
+                        prompt, tables, get_chat_model(model=st.session_state.cfg_ollama_model)
+                    )
+                message["content"] = response.answer
+            else:
+                with st.spinner("Searching documents…"):
+                    result = st.session_state.rag_chain.invoke(prompt)
+                message["content"] = result["answer"]
+                message["sources"], message["citation_warnings"] = _sources_from_result(result)
+        except LLMError as e:
+            message["content"] = f"The language model request failed: {e}"
+            st.error(message["content"])
         else:
-            with st.spinner("Searching documents…"):
-                result = st.session_state.rag_chain.invoke(prompt)
-
-            answer = result.get("answer", "")
-            source_docs = result.get("context", [])
-
-            seen_keys: set = set()
-            sources: list = []
-            for doc in source_docs:
-                key = (
-                    doc.metadata.get("source", ""),
-                    doc.metadata.get("loc", ""),
-                )
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    sources.append({
-                        "filename": doc.metadata.get("source", "unknown"),
-                        "loc": doc.metadata.get("loc", ""),
-                        "snippet": doc.page_content[:200].replace("\n", " "),
-                    })
-
-            st.markdown(answer)
-            if sources:
-                with st.expander(f"◈  {len(sources)} source chunk{'s' if len(sources) != 1 else ''}"):
-                    for s in sources:
-                        loc_html = f'<div class="rb-source-loc">@ {s["loc"]}</div>' if s["loc"] else ""
-                        st.markdown(
-                            f'<div class="rb-source">'
-                            f'<div class="rb-source-path">'
-                            f'<i class="rb-source-icon">◈</i>{s["filename"]}'
-                            f'</div>'
-                            f'{loc_html}'
-                            f'<div class="rb-source-snippet">{s["snippet"]}</div>'
-                            f'</div>',
-                            unsafe_allow_html=True,
-                        )
-
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": answer,
-                "sources": sources,
-            })
+            st.markdown(message["content"])
+            _render_sources(message["sources"], message["citation_warnings"])
+        st.session_state.messages.append(message)
