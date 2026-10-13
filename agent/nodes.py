@@ -19,7 +19,13 @@ from agent.schemas import QueryPlan, VerifierOutput
 from agent.state import AgentState, TraceEvent
 from agent.tools import RetrievalTools, ToolError
 from agent.verifier import assess, revision_feedback
-from citations import ABSTAIN_TEXT, build_evidence, split_claims, validate_citations
+from citations import (
+    ABSTAIN_TEXT,
+    build_evidence,
+    is_absence_statement,
+    split_claims,
+    validate_citations,
+)
 from llm import ChatModel, LLMError, LLMResult
 from llm.structured import complete_structured
 from retriever import build_standard_messages
@@ -282,13 +288,17 @@ class AgentNodes:
         elif self._remaining(state) <= 0:
             v = assess(answer, evidence, report, None, llm_error="time budget exhausted")
         else:
-            claims = split_claims(answer)[:12]
+            all_claims = split_claims(answer)
+            checkable = [c for c in all_claims if not is_absence_statement(c)]
+            claims, absence = checkable[:12], len(all_claims) - len(checkable)
             res = complete_structured(
                 self.deps.verifier, verifier_messages(state["question"], evidence, claims),
                 VerifierOutput, timeout_s=self._remaining(state), temperature=0.0,
             )
             update.update(_accounting(res.llm_results))
             v = assess(answer, evidence, report, res.value, llm_error=res.error, claims=claims)
+            if absence:
+                v.issues.append(f"{absence} statement(s) about missing information were not claim-verified")
 
         if v.llm_status == "failed":
             summary = "Claim verification failed; answer is not verified"

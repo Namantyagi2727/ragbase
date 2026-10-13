@@ -31,6 +31,14 @@ _ABSTAIN_PATTERNS = [
     re.compile(r"\bthe (?:provided )?(?:documents|context|evidence) do(?:es)? not (?:contain|mention|state|specify)\b", re.I),
 ]
 
+# Sentences that assert something is *absent* from the documents. They cannot
+# be grounded by citing a passage, so claim verification skips them.
+_ABSENCE_PATTERNS = _ABSTAIN_PATTERNS + [
+    re.compile(r"\bnot (?:explicitly |specifically |directly )?(?:stated|mentioned|specified|provided|covered|addressed)\b", re.I),
+    re.compile(r"\b(?:does|do) not (?:provide|include|say|cover|address|give)\b", re.I),
+    re.compile(r"\bno (?:information|mention|details?)\b", re.I),
+]
+
 CITE_RE = re.compile(r"\[\s*(E\d+(?:\s*[,;]\s*E\d+)*)\s*\]")
 _ID_RE = re.compile(r"E\d+")
 # Bracketed references that look like sources but are not evidence IDs,
@@ -116,6 +124,11 @@ def is_abstention(text: str) -> bool:
     return any(p.search(text) for p in _ABSTAIN_PATTERNS)
 
 
+def is_absence_statement(claim: str) -> bool:
+    """True for claims like "the evidence does not state X" (absence, not a fact to ground)."""
+    return any(p.search(claim) for p in _ABSENCE_PATTERNS)
+
+
 def split_claims(text: str) -> list[str]:
     """Split an answer into sentence-level claims, skipping headings and source lists."""
     normalized = _TRAILING_CITE_RE.sub(r" \2\1", text)
@@ -176,7 +189,9 @@ def validate_citations(answer: str, evidence: list[Evidence]) -> CitationReport:
     known = {e.eid for e in evidence}
     cited = extract_citations(answer)
     claims = split_claims(answer)
-    abstained = is_abstention(answer)
+    # An answer that cites evidence is a (possibly partial) answer, not an
+    # abstention, even if one of its sentences says something is missing.
+    abstained = is_abstention(answer) and not cited
     return CitationReport(
         cited_ids=cited,
         valid_ids=[c for c in cited if c in known],

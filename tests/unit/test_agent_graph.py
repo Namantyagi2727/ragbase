@@ -282,3 +282,20 @@ def test_verdict_for_nonexistent_claim_number_is_ignored():
     result, _ = _run(model)
     assert result.verification.grounding == "not_verified"
     assert any("claim 9" in i for i in result.verification.issues)
+
+
+def test_absence_statements_are_not_sent_for_claim_verification():
+    seen = []
+
+    def verifier(messages):
+        seen.append(messages[-1]["content"])
+        return json.dumps({"verdicts": [{"claim_number": 1, "status": "supported", "evidence_ids": ["E1"]}],
+                           "recommendation": "accept"})
+
+    answer = ("In 2023 the meal allowance was 45 dollars [E1]. "
+              "The evidence does not provide the allowance for interns.")
+    model = RoleModel(planner=[COMPLEX], synth=[answer], verifier=[verifier])
+    result, _ = _run(model)
+    assert "interns" not in seen[0]
+    assert result.verification.grounding == "verified"
+    assert any("missing information were not claim-verified" in i for i in result.verification.issues)

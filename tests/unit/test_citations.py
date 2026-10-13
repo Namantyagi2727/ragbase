@@ -97,3 +97,20 @@ def test_resolve_returns_cited_evidence_in_citation_order():
 def test_report_serializes():
     d = validate_citations("Fact here is cited [E1].", build_evidence(_docs())).to_dict()
     assert d["ok"] is True and d["valid_ids"] == ["E1"]
+
+
+def test_partial_answer_with_a_missing_information_sentence_is_not_an_abstention():
+    ev = build_evidence(_docs())
+    answer = ("The first document says alpha [E1]. "
+              "The documents do not mention when it takes effect.")
+    rep = validate_citations(answer, ev)
+    assert not rep.abstained
+    assert rep.uncited_claims == ["The documents do not mention when it takes effect."]
+
+
+def test_absence_statement_detection():
+    from citations import is_absence_statement
+
+    assert is_absence_statement("The specific limit is not explicitly stated in the evidence.")
+    assert is_absence_statement("The evidence does not provide a deadline.")
+    assert not is_absence_statement("The limit is 0.02 percent for drivers under 21 [E6].")
