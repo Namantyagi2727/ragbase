@@ -6,7 +6,9 @@ Build the exact prompts RAGBase would send through Prism, for guardrail testing.
         --index-dir ./benchmark_index --queries benchmark   # real retrieved evidence
 
 Each line: {"case", "role", "messages"}. Roles: standard (Standard RAG and the
-agent's simple route), planner, synthesis, verifier. Run scan_guardrails.py
+agent's simple route), planner, synthesis, verifier, abstention_check, tabular.
+Structured roles are emitted exactly as the Prism adapter sends them (with the
+field-list instruction appended). Run scan_guardrails.py
 (in Prism's environment) or check_live.py (against a running Prism) on the output.
 """
 
@@ -23,9 +25,22 @@ sys.path.insert(0, str(ROOT))
 
 from langchain_core.documents import Document  # noqa: E402
 
-from agent.prompts import planner_messages, synthesis_messages, verifier_messages  # noqa: E402
+from agent.prompts import (  # noqa: E402
+    abstention_check_messages,
+    planner_messages,
+    synthesis_messages,
+    verifier_messages,
+)
+from agent.schemas import AbstentionCheck, QueryPlan, VerifierOutput  # noqa: E402
 from citations import build_evidence  # noqa: E402
+from llm.openai_compat import with_json_instruction  # noqa: E402
 from retriever import build_standard_messages  # noqa: E402
+from tabular import TABULAR_SYSTEM_PROMPT, TabularQuery  # noqa: E402
+
+
+def on_the_wire(messages, schema):
+    """The prompt exactly as the Prism adapter sends a structured request."""
+    return with_json_instruction(messages, schema.model_json_schema())
 
 FIXTURES = ROOT / "tests" / "fixtures" / "guardrail_docs"
 QUESTIONS = {
@@ -49,11 +64,16 @@ def fixture_cases():
             "chunk_id": path.stem, "source": path.name, "loc": "txt"})])
         claim = f"{text.split('.')[1].strip()} [{evidence[0].eid}]."
         yield path.name, "standard", build_standard_messages(question, evidence)
-        yield path.name, "planner", planner_messages(question, names)
+        yield path.name, "planner", on_the_wire(planner_messages(question, names), QueryPlan)
         yield path.name, "synthesis", synthesis_messages(question, evidence)
-        yield path.name, "verifier", verifier_messages(question, evidence, [claim])
+        yield path.name, "verifier", on_the_wire(verifier_messages(question, evidence, [claim]), VerifierOutput)
+        yield path.name, "abstention_check", on_the_wire(abstention_check_messages(question, evidence), AbstentionCheck)
     # Our own prompts with a neutral question and no document text.
-    yield "(no documents)", "planner", planner_messages("What is the refund window?", ["policy.txt"])
+    yield "(no documents)", "planner", on_the_wire(planner_messages("What is the refund window?", ["policy.txt"]), QueryPlan)
+    tab = [{"role": "system", "content": TABULAR_SYSTEM_PROMPT},
+           {"role": "user", "content": "Tables:\n- table 'sales.csv': 4 rows; columns: region (object), units (int64)\n\n"
+                                       "Question: How many units were sold in the EU?"}]
+    yield "(tabular)", "tabular", on_the_wire(tab, TabularQuery)
 
 
 def index_cases(index_dir: str, queries: list[str], k: int):

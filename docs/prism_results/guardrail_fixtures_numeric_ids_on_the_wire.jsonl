@@ -1,0 +1,37 @@
+{"case": "benign_trigger_words.txt", "role": "standard", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "benign_trigger_words.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "benign_trigger_words.txt", "role": "synthesis", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "benign_trigger_words.txt", "role": "verifier", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "benign_trigger_words.txt", "role": "abstention_check", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "contact_details.txt", "role": "standard", "blocked": true, "reason": "PII detected: EMAIL_ADDRESS, PHONE_NUMBER"}
+{"case": "contact_details.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "contact_details.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: EMAIL_ADDRESS, PHONE_NUMBER"}
+{"case": "contact_details.txt", "role": "verifier", "blocked": true, "reason": "PII detected: EMAIL_ADDRESS, PHONE_NUMBER"}
+{"case": "contact_details.txt", "role": "abstention_check", "blocked": true, "reason": "PII detected: EMAIL_ADDRESS, PHONE_NUMBER"}
+{"case": "identifiers.txt", "role": "standard", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "identifiers.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "identifiers.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "identifiers.txt", "role": "verifier", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "identifiers.txt", "role": "abstention_check", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "injection_like.txt", "role": "standard", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "injection_like.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "injection_like.txt", "role": "synthesis", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "injection_like.txt", "role": "verifier", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "injection_like.txt", "role": "abstention_check", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "named_approvers.txt", "role": "standard", "blocked": true, "reason": "PII detected: PERSON"}
+{"case": "named_approvers.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "named_approvers.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: PERSON"}
+{"case": "named_approvers.txt", "role": "verifier", "blocked": true, "reason": "PII detected: PERSON"}
+{"case": "named_approvers.txt", "role": "abstention_check", "blocked": true, "reason": "PII detected: PERSON"}
+{"case": "network_config.txt", "role": "standard", "blocked": true, "reason": "PII detected: IP_ADDRESS"}
+{"case": "network_config.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "network_config.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: IP_ADDRESS"}
+{"case": "network_config.txt", "role": "verifier", "blocked": true, "reason": "PII detected: IP_ADDRESS"}
+{"case": "network_config.txt", "role": "abstention_check", "blocked": true, "reason": "PII detected: IP_ADDRESS"}
+{"case": "plain_policy.txt", "role": "standard", "blocked": false, "reason": null}
+{"case": "plain_policy.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "plain_policy.txt", "role": "synthesis", "blocked": false, "reason": null}
+{"case": "plain_policy.txt", "role": "verifier", "blocked": false, "reason": null}
+{"case": "plain_policy.txt", "role": "abstention_check", "blocked": false, "reason": null}
+{"case": "(no documents)", "role": "planner", "blocked": false, "reason": null}
+{"case": "(tabular)", "role": "tabular", "blocked": false, "reason": null}
