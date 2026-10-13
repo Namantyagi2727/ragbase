@@ -62,11 +62,25 @@ class AgentDeps:
         return self.verifier_model or self.chat_model
 
 
-def _accounting(results: list[LLMResult]) -> dict[str, int]:
+_META_KEYS = ("inference_mode", "provider_used", "fallback_triggered", "cost_usd", "gateway_latency_ms")
+
+
+def _accounting(results: list[LLMResult]) -> dict:
     return {
         "llm_calls": len(results),
         "prompt_tokens": sum(r.prompt_tokens or 0 for r in results),
         "completion_tokens": sum(r.completion_tokens or 0 for r in results),
+        "llm_meta": [
+            {
+                "backend": r.backend,
+                "model": r.model,
+                "latency_s": round(r.latency_s, 3),
+                **{k: r.metadata[k] for k in _META_KEYS if r.metadata.get(k) is not None},
+                **({"prompt_tokens": r.prompt_tokens} if r.prompt_tokens is not None else {}),
+                **({"completion_tokens": r.completion_tokens} if r.completion_tokens is not None else {}),
+            }
+            for r in results
+        ],
     }
 
 
