@@ -11,7 +11,8 @@ Independent signals, never collapsed into one:
   4. Coverage (deterministic): `verified` requires every checkable claim to
      have exactly one valid verdict, and every "supported" verdict to rely on
      evidence the claim itself cites. Missing, duplicate, invalid or
-     unattributable verdicts, uncited claims, claims over the limit and
+     unattributable verdicts (including an extra invalid verdict alongside
+     otherwise complete coverage), uncited claims, claims over the limit and
      unconfirmed absence statements all make the result `incomplete`.
 
 A valid citation report is not proof of grounding, and a verifier call that
@@ -102,6 +103,7 @@ def assess(
     unsupported: list[str] = []
     partial: list[str] = []
     unverified: list[str] = []
+    invalid_verdicts = 0
     verified = 0
     followup = None
     llm_status = "skipped" if llm_skipped else ("completed" if llm_output is not None else "failed")
@@ -111,8 +113,10 @@ def assess(
         for v in llm_output.verdicts:
             bad_ids = [i for i in v.evidence_ids if i not in known]
             if bad_ids:
+                invalid_verdicts += 1
                 issues.append(f"verifier referenced unknown evidence {', '.join(bad_ids)}; verdict ignored")
             elif v.claim_number > len(claims):
+                invalid_verdicts += 1
                 issues.append(f"verifier referenced claim {v.claim_number}, which does not exist; verdict ignored")
             else:
                 by_claim[v.claim_number].append(v)
@@ -162,7 +166,9 @@ def assess(
         grounding = "unsupported"
     elif partial:
         grounding = "partially_verified"
-    elif unverified or over_limit or absence_claims or not claims:
+    elif unverified or over_limit or absence_claims or not claims or invalid_verdicts:
+        # A malformed verdict means the verifier's output cannot be fully trusted,
+        # even if the remaining verdicts cover every claim.
         grounding = "incomplete"
     else:
         grounding = "verified"

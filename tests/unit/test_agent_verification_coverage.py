@@ -184,3 +184,18 @@ def test_abstention_with_no_evidence_is_labelled_no_evidence():
     result, _ = _run(model, "What is the parking policy?", retriever=MemoryRetriever(corpus={}))
     assert result.verification.abstention_check == "no_evidence"
     assert result.status == "completed"
+
+
+@pytest.mark.parametrize("extra", [
+    verdict(1, ids=["E9"]),   # unknown evidence ID
+    verdict(7),               # nonexistent claim number
+])
+def test_extra_invalid_verdict_prevents_full_verification(extra):
+    """Every claim is validly covered, but one additional verdict is malformed."""
+    output = {"verdicts": [verdict(1), verdict(2, ids=["E2"]), extra], "recommendation": "accept"}
+    result, _ = _run(RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[output]))
+    v = result.verification
+    assert (v.claims_verified, v.claims_checked) == (2, 2)
+    assert v.grounding == "incomplete"
+    assert result.status == "completed_unverified"
+    assert any("verdict ignored" in i for i in v.issues)
