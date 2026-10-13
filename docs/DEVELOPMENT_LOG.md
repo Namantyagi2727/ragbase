@@ -170,8 +170,8 @@ reported. Final status:
 
 | Status | Meaning |
 |---|---|
-| `completed` | Verified (or a valid abstention) |
-| `completed_unverified` | Citations valid but claims not verified (simple route, or verifier failed) |
+| `completed` | Every claim verified, or an abstention confirmed by a check / with no evidence retrieved |
+| `completed_unverified` | Citations valid but verification incomplete or not run (simple route, verifier failure, missing verdicts, unconfirmed absence statements) |
 | `qualified` | Unresolved problems after the allowed revisions; answer carries a visible warning |
 | `failed` / `timeout` | Backend error or time budget exhausted |
 
@@ -220,29 +220,81 @@ refinement loop: the verifier's follow-up search found the passage with the
 under-21 limit, but the 3B model's revised answer still contradicted itself,
 and the run ended `qualified` with the problem claim listed.
 
+### Verification-correctness patch (review follow-up)
+
+Review found that one accepted verdict could mark a multi-claim answer
+`verified`, that absence statements bypassed verification while the answer
+could still be `verified`, and that any abstention phrase counted as a
+correct outcome.
+
+- **Complete coverage.** `verified` now requires every checkable claim to
+  have exactly one valid verdict, and each "supported" verdict must include
+  evidence the claim itself cites. Missing, duplicate, invalid or
+  unattributable verdicts, uncited claims, and claims beyond the
+  verification limit (12) give a new grounding value, `incomplete`.
+  Uncited substantive claims also trigger the existing bounded revision.
+- **Absence statements** ("the documents do not specify X") trigger the
+  existing follow-up search (one round, no new loop). If they remain, the
+  result stays `incomplete`, and the answer carries a note that they reflect
+  the retrieved passages (and the targeted search, if it ran), not the
+  whole collection.
+- **Abstentions** are labelled `no_evidence`, `confirmed` (the verifier
+  checked the retrieved evidence and found no answer), `evidence_may_answer`
+  (triggers a revision; `qualified` if none remains), `not_checked` (simple
+  route) or `failed`. Only `no_evidence` and `confirmed` count as
+  `completed`. On the complex route the check uses the verifier's slot, so
+  an abstention with retrieved evidence now costs one model call that
+  previously was skipped.
+
+17 scripted regression tests cover these rules, including a reproduction
+of the driver's-manual failure (absence claim → targeted search → passage
+found → re-verified).
+
+**Live check after the patch** (`llama3.2`, two runs per question, fixture
+corpus plus the driver's manual): no run exceeded one revision or five model
+calls. Statuses: simple questions `completed_unverified` (by design); the
+two-part question `verified` both runs; the comparison `qualified` both runs
+— in the inspected run the answer wrongly said the 2023 policy had no hotel
+rule (correctly caught as an unconfirmed absence statement), but the
+verifier also marked a correct 2024 claim unsupported, a model false
+negative.
+
+**Verifier false positive found.** Across 8 further driver's-manual runs, one
+answer was marked `verified` although it was wrong: it stated the under-21
+limit is 0.08, citing a passage about drivers *over* 21. All deterministic
+checks pass on that claim (valid citation, number present in the cited
+text), and both `llama3.2` and `gemma3:12b` judged it supported on every
+re-check — the passage's two-column extraction interleaves the "over 21"
+text with the DWI lines. `verified` therefore means "passed the
+deterministic checks and the model's claim check", not "correct".
+
 ### Tests
 
 | Suite | Count |
 |---|---|
-| Unit (no models) | 157 |
+| Unit (no models) | 174 |
 | Integration (real embeddings + reranker) | 4 |
 | Live (local Ollama) | 6 |
 
-All 167 pass locally; CI runs lint and the unit suite on every pull request.
+All 184 pass locally; CI runs lint and the unit suite on every pull request.
 
 ### Known limitations after Phase 1B
 
-- **Small-model quality.** `llama3.2` (3B) drafts answers that can be
-  internally inconsistent; the verifier catches some but not all problems.
-  The verifier can be pointed at a larger model with
-  `RAGBASE_AGENT_VERIFIER_MODEL` (not yet evaluated).
-- **Absence statements are unverified.** A wrong "the documents do not
-  state X" is not caught by claim verification.
+- **Model verification can be wrong in both directions.** The verifier has
+  produced a false positive (wrong answer marked `verified`) and false
+  negatives (correct claims marked unsupported). Deterministic checks catch
+  invented citations, missing coverage and numbers absent from cited text,
+  but not semantic misreadings. Measuring verifier precision is Phase 3
+  work. *(Follow-up: model quality.)*
+- **Absence statements cannot be confirmed.** They are searched for once and
+  otherwise reported as unconfirmed; the system never claims information
+  is absent from the whole collection.
 - **Simple-route answers are never claim-verified** (by design, to keep
   simple questions to two model calls); they are reported as
   `completed_unverified`.
 - **Multi-column PDFs** are extracted with interleaved columns by
-  pdfplumber, which degrades retrieval on such documents.
+  pdfplumber, which degrades retrieval and contributed to the verifier false
+  positive above. *(Follow-up: ingestion.)*
 - **No UI integration yet** — Agentic mode is available through code and
   the CLI; the Streamlit mode switch is Phase 4.
 - **Cost of agentic mode:** 2 model calls on the simple route, typically 3–5
