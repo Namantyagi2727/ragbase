@@ -47,7 +47,7 @@ def fixture_cases():
         question = QUESTIONS[path.name]
         evidence = build_evidence([Document(page_content=text, metadata={
             "chunk_id": path.stem, "source": path.name, "loc": "txt"})])
-        claim = f"{text.split('.')[1].strip()} [E1]."
+        claim = f"{text.split('.')[1].strip()} [{evidence[0].eid}]."
         yield path.name, "standard", build_standard_messages(question, evidence)
         yield path.name, "planner", planner_messages(question, names)
         yield path.name, "synthesis", synthesis_messages(question, evidence)

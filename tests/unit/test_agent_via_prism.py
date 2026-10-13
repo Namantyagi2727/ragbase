@@ -14,9 +14,9 @@ from tests.unit.agent_helpers import ROLE_MARKERS, MemoryRetriever
 from tests.unit.test_prism_adapter import KEY, prism_body
 
 PLAN = {"route": "complex", "subqueries": [{"query": "2023 meal allowance"}, {"query": "2024 meal allowance"}]}
-ANSWER = "In 2023 the meal allowance was 45 dollars [E1]. In 2024 it rose to 60 dollars [E2]."
-VERDICTS = {"verdicts": [{"claim_number": 1, "status": "supported", "evidence_ids": ["E1"]},
-                         {"claim_number": 2, "status": "supported", "evidence_ids": ["E2"]}],
+ANSWER = "In 2023 the meal allowance was 45 dollars [1]. In 2024 it rose to 60 dollars [2]."
+VERDICTS = {"verdicts": [{"claim_number": 1, "status": "supported", "evidence_ids": ["1"]},
+                         {"claim_number": 2, "status": "supported", "evidence_ids": ["2"]}],
             "recommendation": "accept"}
 
 
@@ -29,7 +29,7 @@ class FakePrism:
             "planner": httpx.Response(200, json=prism_body(json.dumps(PLAN))),
             "synth": httpx.Response(200, json=prism_body(ANSWER)),
             "verifier": httpx.Response(200, json=prism_body(json.dumps(VERDICTS))),
-            "standard": httpx.Response(200, json=prism_body("The 2024 allowance is 60 dollars [E1].")),
+            "standard": httpx.Response(200, json=prism_body("The 2024 allowance is 60 dollars [1].")),
         }
         self.replies.update(overrides)
 

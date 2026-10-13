@@ -28,6 +28,7 @@ from citations import (
     ABSTAIN_TEXT,
     build_evidence,
     is_absence_statement,
+    normalize_citations,
     split_claims,
     validate_citations,
 )
@@ -207,7 +208,7 @@ class AgentNodes:
             )
         except LLMError as e:
             return {"retrieval_calls": 1, "evidence": evidence, **self._failed(state, "standard", e)}
-        answer = result.text.strip()
+        answer, normalized = normalize_citations(result.text.strip())
         report = validate_citations(answer, evidence)
         if report.abstained:
             verification = assess_abstention(evidence, report, None, attempted=False)
@@ -229,7 +230,8 @@ class AgentNodes:
                 self._event(state, "retrieve", f"Retrieved {len(evidence)} passage(s)",
                             queries=[question], evidence=len(evidence)),
                 self._event(state, "answer", "Answered with standard RAG; claim verification skipped for simple route",
-                            offset=1, citation_ok=report.ok, cited=report.valid_ids),
+                            offset=1, citation_ok=report.ok, cited=report.valid_ids,
+                            citations_normalized=normalized),
             ],
         }
 
@@ -299,7 +301,7 @@ class AgentNodes:
             )
         except LLMError as e:
             return self._failed(state, "synthesize", e)
-        answer = result.text.strip()
+        answer, normalized = normalize_citations(result.text.strip())
         report = validate_citations(answer, evidence)
         revision = state.get("revision_count", 0)
         return {
@@ -312,6 +314,7 @@ class AgentNodes:
                 + f" citing {len(report.valid_ids)} of {len(evidence)} passage(s)",
                 cited=report.valid_ids, invalid=report.invalid_ids,
                 coverage=round(report.citation_coverage, 2), abstained=report.abstained,
+                citations_normalized=normalized,
             )],
         }
 

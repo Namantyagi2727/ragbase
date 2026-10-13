@@ -27,7 +27,14 @@ from typing import Optional
 
 from agent.schemas import AbstentionCheck, VerifierOutput
 from agent.state import Verification
-from citations import CITE_RE, CitationReport, Evidence, extract_citations, split_claims
+from citations import (
+    CITE_RE,
+    CitationReport,
+    Evidence,
+    extract_citations,
+    normalize_evidence_id,
+    split_claims,
+)
 
 _NUMBER_RE = re.compile(r"(?<![\w.])(\d+(?:[.,]\d+)*|\.\d+)(?:\s?%)?")
 
@@ -111,6 +118,7 @@ def assess(
     if llm_output is not None:
         by_claim: dict[int, list] = defaultdict(list)
         for v in llm_output.verdicts:
+            v = v.model_copy(update={"evidence_ids": [normalize_evidence_id(i) for i in v.evidence_ids]})
             bad_ids = [i for i in v.evidence_ids if i not in known]
             if bad_ids:
                 invalid_verdicts += 1
@@ -230,7 +238,8 @@ def assess_abstention(
         issues.append("abstention check failed")
     else:
         llm_status = "completed"
-        cited = [i for i in check.evidence_ids if i in known]
+        cited = [normalize_evidence_id(i) for i in check.evidence_ids]
+        cited = [i for i in cited if i in known]
         if check.answerable in ("yes", "partially") and cited:
             outcome, decision = "evidence_may_answer", "revise"
             issues.append(f"verifier found evidence that may answer the question: {', '.join(cited)}")

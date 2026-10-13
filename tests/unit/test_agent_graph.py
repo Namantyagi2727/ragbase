@@ -16,11 +16,11 @@ COMPLEX = {
     "rationale": "two policies",
     "subqueries": [{"query": "2023 meal allowance"}, {"query": "2024 meal allowance"}],
 }
-TWO_FACTS = "In 2023 the meal allowance was 45 dollars [E1]. In 2024 it rose to 60 dollars [E2]."
+TWO_FACTS = "In 2023 the meal allowance was 45 dollars [1]. In 2024 it rose to 60 dollars [2]."
 ACCEPT = {
     "verdicts": [
-        {"claim_number": 1, "status": "supported", "evidence_ids": ["E1"]},
-        {"claim_number": 2, "status": "supported", "evidence_ids": ["E2"]},
+        {"claim_number": 1, "status": "supported", "evidence_ids": ["1"]},
+        {"claim_number": 2, "status": "supported", "evidence_ids": ["2"]},
     ],
     "recommendation": "accept",
 }
@@ -42,7 +42,7 @@ def _nodes(result):
 # --- routing ------------------------------------------------------------------
 
 def test_simple_route_uses_standard_rag_path_and_skips_claim_verification():
-    model = RoleModel(planner=[SIMPLE], standard=["The 2024 meal allowance is 60 dollars [E1]."])
+    model = RoleModel(planner=[SIMPLE], standard=["The 2024 meal allowance is 60 dollars [1]."])
     result, _ = _run(model, "What is the 2024 meal allowance?")
     assert result.route == "simple"
     assert model.calls == ["planner", "standard"]
@@ -53,7 +53,7 @@ def test_simple_route_uses_standard_rag_path_and_skips_claim_verification():
 
 
 def test_invalid_planner_output_falls_back_to_standard_and_is_recorded():
-    model = RoleModel(planner=["not json", "still not json"], standard=["Sixty dollars per day [E1]."])
+    model = RoleModel(planner=["not json", "still not json"], standard=["Sixty dollars per day [1]."])
     result, _ = _run(model, "What is the 2024 meal allowance?")
     assert result.route == "simple"
     assert result.planner_fallback and "invalid structured output" in result.planner_fallback
@@ -114,7 +114,7 @@ def test_complex_route_with_no_evidence_abstains_without_calling_the_synthesizer
 
 def test_valid_citations_are_not_enough_when_verifier_finds_unsupported_claims():
     unsupported = {
-        "verdicts": [{"claim_number": 2, "status": "unsupported", "evidence_ids": ["E2"]}],
+        "verdicts": [{"claim_number": 2, "status": "unsupported", "evidence_ids": ["2"]}],
         "recommendation": "revise",
     }
     model = RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[unsupported])
@@ -150,7 +150,7 @@ def test_empty_verdict_list_is_not_verification():
 
 
 def test_number_absent_from_cited_evidence_is_caught_deterministically():
-    wrong = "In 2023 the meal allowance was 75 dollars [E1]. In 2024 it rose to 60 dollars [E2]."
+    wrong = "In 2023 the meal allowance was 75 dollars [1]. In 2024 it rose to 60 dollars [2]."
     model = RoleModel(planner=[COMPLEX], synth=[wrong], verifier=[ACCEPT])  # verifier wrongly accepts
     result, _ = _run(model, max_revisions=0)
     assert result.verification.numeric_mismatches and "75" in result.verification.numeric_mismatches[0]
@@ -160,7 +160,7 @@ def test_number_absent_from_cited_evidence_is_caught_deterministically():
 # --- bounded refinement ---------------------------------------------------------
 
 REVISE = {
-    "verdicts": [{"claim_number": 2, "status": "unsupported", "evidence_ids": ["E2"]}],
+    "verdicts": [{"claim_number": 2, "status": "unsupported", "evidence_ids": ["2"]}],
     "followup_query": "2024 hotel approval",
     "recommendation": "revise",
 }
@@ -175,7 +175,7 @@ def test_refinement_runs_a_targeted_search_and_reverifies():
         "plan", "retrieve", "synthesize", "verify", "refine", "retrieve", "synthesize", "verify", "finalize",
     ]
     assert len(result.evidence) == 3  # follow-up evidence appended with continued numbering
-    assert result.evidence[-1].eid == "E3"
+    assert result.evidence[-1].eid == "3"
 
 
 def test_revision_prompt_carries_verifier_feedback():
@@ -188,7 +188,7 @@ def test_revision_prompt_carries_verifier_feedback():
     model = RoleModel(planner=[COMPLEX], synth=[synth], verifier=[REVISE, ACCEPT])
     _run(model)
     assert "problems" not in captured[0]
-    assert "not supported by the evidence: In 2024 it rose to 60 dollars [E2]." in captured[1]
+    assert "not supported by the evidence: In 2024 it rose to 60 dollars [2]." in captured[1]
 
 
 @pytest.mark.parametrize("max_revisions", [0, 1, 2])
@@ -201,7 +201,7 @@ def test_revision_rounds_never_exceed_the_limit(max_revisions):
 
 
 def test_invalid_citation_triggers_resynthesis_without_new_search():
-    bad = "In 2023 the meal allowance was 45 dollars [E9]."
+    bad = "In 2023 the meal allowance was 45 dollars [9]."
     model = RoleModel(planner=[COMPLEX], synth=[bad, TWO_FACTS], verifier=[ACCEPT])
     result, retriever = _run(model)
     assert result.revision_count == 1 and result.status == "completed"
@@ -262,7 +262,7 @@ def test_tool_rejects_invalid_arguments(kwargs):
 
 
 def test_trace_steps_are_unique_on_the_simple_route():
-    model = RoleModel(planner=[SIMPLE], standard=["Sixty dollars per day [E1]."])
+    model = RoleModel(planner=[SIMPLE], standard=["Sixty dollars per day [1]."])
     result, _ = _run(model, "What is the 2024 meal allowance?")
     assert [e["step"] for e in result.trace] == [1, 2, 3, 4]
 
@@ -276,7 +276,7 @@ def test_file_name_prefixes_are_stripped_from_planned_queries():
 
 
 def test_verdict_for_nonexistent_claim_number_is_ignored():
-    bogus = {"verdicts": [{"claim_number": 9, "status": "supported", "evidence_ids": ["E1"]}],
+    bogus = {"verdicts": [{"claim_number": 9, "status": "supported", "evidence_ids": ["1"]}],
              "recommendation": "accept"}
     model = RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[bogus])
     result, _ = _run(model)
@@ -290,10 +290,10 @@ def test_absence_statements_are_not_sent_for_claim_verification():
 
     def verifier(messages):
         seen.append(messages[-1]["content"])
-        return json.dumps({"verdicts": [{"claim_number": 1, "status": "supported", "evidence_ids": ["E1"]}],
+        return json.dumps({"verdicts": [{"claim_number": 1, "status": "supported", "evidence_ids": ["1"]}],
                            "recommendation": "accept"})
 
-    answer = ("In 2023 the meal allowance was 45 dollars [E1]. "
+    answer = ("In 2023 the meal allowance was 45 dollars [1]. "
               "The evidence does not provide the allowance for interns.")
     model = RoleModel(planner=[COMPLEX], synth=[answer], verifier=[verifier])
     result, _ = _run(model, max_revisions=0)

@@ -66,7 +66,7 @@ def test_repeated_identical_request_is_rejected_as_unattributed_cache_hit(prism)
 
 
 def test_evidence_prompt_is_blocked_by_current_guardrails(prism):
-    """Known incompatibility: evidence IDs like 'E1' match Presidio's US_DRIVER_LICENSE pattern."""
+    """Known incompatibility: evidence IDs like '1' match Presidio's US_DRIVER_LICENSE pattern."""
     text = (FIXTURES / "plain_policy.txt").read_text()
     from langchain_core.documents import Document
 

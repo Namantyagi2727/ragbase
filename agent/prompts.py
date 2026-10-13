@@ -45,12 +45,12 @@ def synthesis_messages(question: str, evidence: list[Evidence], feedback: str | 
     )
     if feedback:
         user += f"{feedback}\n\n"
-    user += "Write the answer in your own words, citing evidence IDs in square brackets like [E1]."
+    user += "Write the answer in your own words, citing evidence IDs in square brackets like [1]."
     return [
         {"role": "system", "content": f"""You answer questions using ONLY the evidence provided.
 
 Rules:
-- Support every factual statement with the evidence ID(s) it comes from, e.g. [E1] or [E2, E3].
+- Support every factual statement with the evidence ID(s) it comes from, e.g. [1] or [2, 3].
 - Cite only IDs that appear in the evidence. Never cite file names or invent references.
 - When documents disagree, say so explicitly and cite each side.
 - Clearly separate what the evidence states from any inference you draw.
@@ -69,7 +69,8 @@ For each numbered claim, give its claim_number and decide using ONLY the evidenc
 - "supported": the cited evidence states it.
 - "partially_supported": some of it is stated, some is not.
 - "unsupported": the evidence does not state it, or contradicts it.
-List the evidence IDs you relied on for each verdict.
+For each verdict, list in evidence_ids the id numbers of the evidence documents you
+checked (the id attribute of each document, e.g. "1" or "3").
 
 Then recommend:
 - "accept" if all claims are supported.

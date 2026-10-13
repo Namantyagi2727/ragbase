@@ -106,7 +106,7 @@ class AgentState(TypedDict, total=False):
     planner_fallback: Optional[str]         # why the planner's output was not used
 
     # retrieval
-    evidence: list[Evidence]                # numbered E1..En; numbering is stable across rounds
+    evidence: list[Evidence]                # numbered 1..n; numbering is stable across rounds
     pending_queries: list[dict[str, Any]]   # [{query, sources}] for the next retrieval round
 
     # synthesis / verification

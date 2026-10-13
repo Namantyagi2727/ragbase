@@ -32,7 +32,9 @@ class ClaimVerdict(BaseModel):
     model_config = ConfigDict(extra="ignore")
     claim_number: int = Field(ge=1, le=12)   # 1-based index into the numbered claims shown
     status: Literal["supported", "partially_supported", "unsupported"]
-    evidence_ids: list[str] = Field(default_factory=list, max_length=10)
+    # The evidence documents checked for this claim (their id numbers). Required:
+    # with numeric IDs the model otherwise tended to leave this list empty.
+    evidence_ids: list[str] = Field(min_length=1, max_length=10)
     note: str = Field(default="", max_length=300)
 
 
