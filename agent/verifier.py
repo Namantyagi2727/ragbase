@@ -45,7 +45,11 @@ def numeric_mismatches(answer: str, evidence: list[Evidence]) -> list[str]:
         cited = [by_id[c] for c in extract_citations(claim) if c in by_id]
         if not cited:
             continue
-        available = set().union(*(numbers_in(e.text) for e in cited))
+        # The model sees each passage's source name (e.g. "policy_2023.txt"), so
+        # numbers in it are legitimately available to the answer.
+        available = set().union(*(
+            numbers_in(f"{e.text} {re.sub(r'[^0-9A-Za-z]+', ' ', e.source)}") for e in cited
+        ))
         missing = sorted(numbers_in(claim) - available)
         if missing:
             problems.append(f"{claim} (not in cited evidence: {', '.join(missing)})")
@@ -59,8 +63,11 @@ def assess(
     llm_output: Optional[VerifierOutput],
     llm_error: Optional[str] = None,
     llm_skipped: bool = False,
+    claims: Optional[list[str]] = None,
 ) -> Verification:
+    """`claims` must be the numbered claim list shown to the verifier (defaults to split_claims)."""
     known = {e.eid for e in evidence}
+    claims = claims if claims is not None else split_claims(answer)[:12]
     issues: list[str] = []
     if report.invalid_ids:
         issues.append(f"cites evidence that was not provided: {', '.join(report.invalid_ids)}")
@@ -83,11 +90,15 @@ def assess(
             if bad_ids:
                 issues.append(f"verifier referenced unknown evidence {', '.join(bad_ids)}; verdict ignored")
                 continue
+            if v.claim_number > len(claims):
+                issues.append(f"verifier referenced claim {v.claim_number}, which does not exist; verdict ignored")
+                continue
             accepted_verdicts += 1
+            claim_text = claims[v.claim_number - 1]
             if v.status == "unsupported":
-                unsupported.append(v.claim)
+                unsupported.append(claim_text)
             elif v.status == "partially_supported":
-                partial.append(v.claim)
+                partial.append(claim_text)
         followup = (llm_output.followup_query or "").strip() or None
         if llm_output.missing_information:
             issues.append(f"missing information: {llm_output.missing_information}")

@@ -19,10 +19,21 @@ Choose a route:
 - "complex": it needs several searches — comparing documents, combining facts from
   different places, multi-part questions, or checking for conflicting information.
 
-For "complex", write up to 3 focused search queries. To search specific documents,
-list their exact names (from the list provided) in "sources". Set compare_documents
-to true when the question asks to compare or reconcile documents.
-Keep "rationale" to one short sentence. {UNTRUSTED_NOTE}"""},
+Most questions are "simple". Use "complex" only when one search clearly cannot cover it.
+
+For "complex", write up to 3 focused search queries in plain natural language (no file
+names, colons or operators inside the query text). Only fill "sources" when the question
+names a specific document; use exact names from the list. Set compare_documents to true
+when the question asks to compare, contrast or reconcile documents.
+Keep "rationale" to one short sentence. {UNTRUSTED_NOTE}
+
+Examples:
+- "What is the refund window?" -> {{"route": "simple", "rationale": "single fact"}}
+- "Which policy applies to contractors?" -> {{"route": "simple", "rationale": "single lookup"}}
+- "Compare the 2022 and 2023 pricing terms" -> {{"route": "complex", "compare_documents": true,
+  "subqueries": [{{"query": "pricing terms"}}]}}
+- "What is the notice period, and who approves exceptions?" -> {{"route": "complex",
+  "subqueries": [{{"query": "notice period"}}, {{"query": "who approves exceptions"}}]}}"""},
         {"role": "user", "content": f"Documents:\n{doc_list}\n\nQuestion: {question}"},
     ]
 
@@ -54,7 +65,7 @@ def verifier_messages(question: str, evidence: list[Evidence], claims: list[str]
     return [
         {"role": "system", "content": f"""You check whether an answer's claims are supported by evidence.
 
-For each claim, decide using ONLY the evidence text:
+For each numbered claim, give its claim_number and decide using ONLY the evidence text:
 - "supported": the cited evidence states it.
 - "partially_supported": some of it is stated, some is not.
 - "unsupported": the evidence does not state it, or contradicts it.

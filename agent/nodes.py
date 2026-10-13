@@ -58,6 +58,16 @@ def _accounting(results: list[LLMResult]) -> dict[str, int]:
     }
 
 
+def _clean_query(query: str, documents: list[str]) -> str:
+    """Strip file-name prefixes small models put inside query text ("handbook.txt: leave")."""
+    q = query.strip()
+    for doc in documents:
+        for prefix in (doc, doc.rsplit(".", 1)[0]):
+            if q.lower().startswith(prefix.lower()) and q[len(prefix):len(prefix) + 1] in (":", " "):
+                q = q[len(prefix) + 1:].strip()
+    return " ".join(q.split())
+
+
 class AgentNodes:
     def __init__(self, deps: AgentDeps):
         self.deps = deps
@@ -65,9 +75,12 @@ class AgentNodes:
 
     # -- helpers ---------------------------------------------------------------
 
-    def _event(self, state: AgentState, node: str, summary: str, **data: Any) -> TraceEvent:
+    def _event(
+        self, state: AgentState, node: str, summary: str, *, offset: int = 0, **data: Any
+    ) -> TraceEvent:
+        """A trace event; `offset` numbers additional events emitted by the same node."""
         return {
-            "step": len(state.get("trace", [])) + 1,
+            "step": len(state.get("trace", [])) + 1 + offset,
             "node": node,
             "summary": summary,
             "data": data,
@@ -103,7 +116,7 @@ class AgentNodes:
         docs = self.deps.tools.list_documents()
         res = complete_structured(
             self.deps.chat_model, planner_messages(question, docs), QueryPlan,
-            timeout_s=self._remaining(state),
+            timeout_s=self._remaining(state), temperature=0.0,
         )
         update: dict = _accounting(res.llm_results)
         if res.backend_error:
@@ -119,7 +132,11 @@ class AgentNodes:
             return update
 
         plan: QueryPlan = res.value
-        subqueries = [sq.model_dump() for sq in plan.subqueries[: self.s.max_subqueries]]
+        subqueries = [
+            {"query": _clean_query(sq.query, docs), "sources": sq.sources}
+            for sq in plan.subqueries[: self.s.max_subqueries]
+        ]
+        subqueries = [sq for sq in subqueries if sq["query"]]
         if plan.route == "complex" and not subqueries:
             subqueries = [{"query": question[:300], "sources": []}]
         update.update(
@@ -171,7 +188,7 @@ class AgentNodes:
                 self._event(state, "retrieve", f"Retrieved {len(evidence)} passage(s)",
                             queries=[question], evidence=len(evidence)),
                 self._event(state, "answer", "Answered with standard RAG; claim verification skipped for simple route",
-                            citation_ok=report.ok, cited=report.valid_ids),
+                            offset=1, citation_ok=report.ok, cited=report.valid_ids),
             ],
         }
 
@@ -268,10 +285,10 @@ class AgentNodes:
             claims = split_claims(answer)[:12]
             res = complete_structured(
                 self.deps.verifier, verifier_messages(state["question"], evidence, claims),
-                VerifierOutput, timeout_s=self._remaining(state),
+                VerifierOutput, timeout_s=self._remaining(state), temperature=0.0,
             )
             update.update(_accounting(res.llm_results))
-            v = assess(answer, evidence, report, res.value, llm_error=res.error)
+            v = assess(answer, evidence, report, res.value, llm_error=res.error, claims=claims)
 
         if v.llm_status == "failed":
             summary = "Claim verification failed; answer is not verified"

@@ -30,7 +30,7 @@ class QueryPlan(BaseModel):
 
 class ClaimVerdict(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    claim: str = Field(max_length=500)
+    claim_number: int = Field(ge=1, le=12)   # 1-based index into the numbered claims shown
     status: Literal["supported", "partially_supported", "unsupported"]
     evidence_ids: list[str] = Field(default_factory=list, max_length=10)
     note: str = Field(default="", max_length=300)
@@ -40,7 +40,9 @@ class VerifierOutput(BaseModel):
     """Verifier decision: which claims the evidence supports, and whether to retry."""
 
     model_config = ConfigDict(extra="ignore")
-    verdicts: list[ClaimVerdict] = Field(default_factory=list, max_length=12)
+    # Required with at least one entry: schema-constrained decoding only
+    # enforces required fields, and small models otherwise omit verdicts.
+    verdicts: list[ClaimVerdict] = Field(min_length=1, max_length=12)
     missing_information: Optional[str] = Field(default=None, max_length=300)
     followup_query: Optional[str] = Field(default=None, max_length=300)
     recommendation: Literal["accept", "revise", "insufficient_evidence"]
