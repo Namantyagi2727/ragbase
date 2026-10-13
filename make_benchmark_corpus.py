@@ -14,7 +14,6 @@ Usage:
 """
 import argparse
 import csv
-import glob
 import os
 import random
 import re
@@ -158,19 +157,22 @@ def main():
         return "\n\n".join(text[j:j + 500] for j in range(0, len(text), 500))
 
     for _ in range(n_txt):
-        body = body_for(docs_words[idx]); idx += 1
+        body = body_for(docs_words[idx])
+        idx += 1
         fn = f"doc_{idx:05d}.txt"
         write_txt(os.path.join(args.out, fn), body)
         manifest.append((fn, "txt"))
 
     for _ in range(n_pdf):
-        body = body_for(docs_words[idx]); idx += 1
+        body = body_for(docs_words[idx])
+        idx += 1
         fn = f"doc_{idx:05d}.pdf"
         write_pdf(os.path.join(args.out, fn), body)
         manifest.append((fn, "pdf"))
 
     for _ in range(n_docx):
-        body = body_for(docs_words[idx]); idx += 1
+        body = body_for(docs_words[idx])
+        idx += 1
         fn = f"doc_{idx:05d}.docx"
         write_docx(os.path.join(args.out, fn), body)
         manifest.append((fn, "docx"))

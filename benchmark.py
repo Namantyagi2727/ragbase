@@ -9,8 +9,8 @@ Usage:
 
 Reports, separately:
   - ingestion throughput (files/sec, chunks produced)
-  - hybrid retrieval alone (FAISS + TF-IDF, no reranking)
-  - hybrid + cross-encoder reranking (RAGBase's default retrieval config)
+  - hybrid retrieval alone (FAISS + TF-IDF fused with RRF, no reranking)
+  - hybrid + cross-encoder reranking of the fused candidate pool (default config)
   - full retrieval + LLM generation (requires Ollama running)
 
 Results are printed and written to benchmark_results.json.
@@ -23,9 +23,9 @@ import statistics as stats
 import sys
 import time
 
+import config
 import ingest
 import retriever as rmod
-import config
 
 QUERIES = [
     "Who is Elizabeth Bennet and how does she feel about Mr. Darcy?",
@@ -90,6 +90,20 @@ def main():
         sys.exit(f"No corpus found at {args.corpus_dir}. Run make_benchmark_corpus.py first.")
 
     results = {}
+    commit = os.popen("git rev-parse --short HEAD 2>/dev/null").read().strip()
+    dirty = bool(os.popen("git status --porcelain 2>/dev/null").read().strip())
+    results["git_commit"] = f"{commit}{'+uncommitted' if dirty else ''}" or "unknown"
+    results["config"] = {
+        "embed_model": config.EMBED_MODEL,
+        "llm_model": config.OLLAMA_MODEL,
+        "rerank_model": config.RERANK_MODEL,
+        "top_k": config.TOP_K,
+        "candidate_pool": config.CANDIDATE_POOL,
+        "rrf_k": config.RRF_K,
+        "chunk_size": config.CHUNK_SIZE,
+        "chunk_overlap": config.CHUNK_OVERLAP,
+        "fusion": "reciprocal_rank_fusion(FAISS, TF-IDF)",
+    }
     results["hardware"] = {
         "machine": platform.machine(),
         "processor": os.popen("sysctl -n machdep.cpu.brand_string 2>/dev/null").read().strip() or platform.processor(),
