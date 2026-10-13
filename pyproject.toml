@@ -1,0 +1,23 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: uses real embedding / reranker models (downloaded from Hugging Face on first run)",
+    "live: requires a running Ollama server; excluded from CI by default",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::FutureWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["ragbase_index", "uploaded_docs", "benchmark_corpus", "benchmark_index"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "S102", "S307"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
