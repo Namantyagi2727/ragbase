@@ -47,3 +47,17 @@ def test_answer_cites_only_retrieved_evidence(chain):
 def test_unanswerable_question_abstains(chain):
     result = chain.invoke("What is the company's policy on bringing pets to the office?")
     assert result["citations"].abstained, result["answer"]
+
+
+def test_tabular_quantity_question_is_summed():
+    """Regression for the count-vs-sum planning error seen with llama3.2."""
+    import pandas as pd
+
+    import tabular as tb
+
+    df = pd.DataFrame({"region": ["EU", "US", "EU", "APAC"], "units": [10, 20, 5, 7]})
+    tables = [tb.Table("sales.csv", "sales.csv", None, df)]
+    resp = tb.answer_tabular_question("How many units were sold in the EU?", tables, get_chat_model())
+    assert resp.ok, resp.error
+    assert resp.query["operation"] == "sum" and resp.query["column"] == "units"
+    assert "15" in resp.answer

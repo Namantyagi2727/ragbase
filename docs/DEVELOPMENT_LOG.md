@@ -8,7 +8,7 @@ test results and known limitations.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repository audit and implementation plan | Done |
-| 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — pending review |
+| 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — in review ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
 | 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Not started |
 | 2 | Optional Prism gateway integration | Not started |
 | 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Not started |
@@ -73,11 +73,12 @@ written), and prose "how many" questions routed to code execution.
 
 | Suite | Count | Needs |
 |---|---|---|
-| Unit (fakes / mocked HTTP, no models) | 97 | nothing |
+| Unit (fakes / mocked HTTP, no models) | 108 | nothing |
 | Integration (real MiniLM embeddings + cross-encoder) | 4 | Hugging Face model download on first run |
-| Live (real Ollama `llama3.2`) | 2 | local Ollama; skipped otherwise |
+| Live (real Ollama `llama3.2`) | 3 | local Ollama; skipped otherwise |
 
-All 103 pass locally; the live tests passed on 4 of 4 repeated runs. Lint
+All 115 pass locally (counts include the quantity fix below); the live
+tests passed on every repeated run. Lint
 (`ruff`) clean. Includes regression tests for malicious tabular inputs
 (code replies, dunder-import column names, unknown operations, extra fields,
 injected filter values, unbounded limits) and an AST check that `exec`,
@@ -92,12 +93,29 @@ unchanged (reranking +10–20ms for scoring 20 candidates instead of 5).
 End-to-end p95 rose to ~3.4s because cited answers are longer; median
 remains 0.6–1.5s.
 
+### Fix: quantity questions counted rows instead of totalling
+
+With `llama3.2`, "How many units were sold in the EU?" was planned as
+`count(units)` (2 rows) instead of `sum(units)` (15).
+
+- Prompt guidance distinguishing row counts from quantity totals was added,
+  but on its own it did **not** fix the case: the model still chose `count`
+  on 3 of 3 attempts.
+- The fix that works is deterministic: `reconcile_operation()` rewrites
+  `count` to `sum` when the question asks "how many / total / number of /
+  how much" followed by a numeric column name. It is skipped for row-count
+  phrasing ("how many rows have…"), identifier columns, non-numeric columns,
+  and questions naming more than one quantity column. The rewrite is shown
+  with the answer.
+- With the real model: the EU question returns `sum` = 15 on 3 of 3
+  attempts; "How many rows are from the EU?" stays `count`; other operations
+  are unchanged. Covered by 11 unit tests and a live regression test.
+
 ### Known limitations after Phase 1A
 
-- **Small-model tabular planning errors.** With `llama3.2`, "How many units
-  were sold in the EU?" was planned as `count(units)` (2 rows) rather than
-  `sum(units)` (15). The executed query is shown with the answer, so the
-  mistake is visible, but it is wrong. To be measured in Phase 3.
+- **Small-model tabular planning** is corrected for the count/sum case only;
+  other misreadings of a question remain possible. The executed query is
+  always shown with the answer. To be measured in Phase 3.
 - **Answer quality is not yet measured.** Citation validity is checked
   deterministically; whether answers are *correct* awaits the evaluation
   suite.
