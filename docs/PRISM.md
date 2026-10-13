@@ -9,127 +9,161 @@ RAGBASE_LLM_BACKEND=ollama   # default — RAGBase → Ollama (fully local)
 RAGBASE_LLM_BACKEND=prism    # RAGBase → Prism → provider chosen by Prism's route
 ```
 
-> **Current status:** Prism's guardrails block every RAGBase prompt that
-> contains retrieved evidence, so Prism mode cannot answer document questions
-> yet. See [Guardrail compatibility](#guardrail-compatibility).
+**Status:** verified end to end against a real local Prism stack (RAGBase →
+Prism → Ollama over HTTP) for Standard RAG and Agentic RAG on documents without
+personal data. Documents containing names, emails, IP addresses, licence-style
+codes or injection-like text are blocked by Prism's guardrails by design.
+Prism itself is unmodified.
 
 ## Inference and privacy modes
 
 | Mode | When | Where document text goes |
 |---|---|---|
 | **Direct local** | `RAGBASE_LLM_BACKEND=ollama` | Ollama on this machine only |
-| **Prism, local model** | `prism`, and the response's `provider_used` is a local provider (`ollama`) | Prism (Docker, this machine) → Ollama on this machine. Also held in Prism's Redis cache (see below) |
-| **Prism, remote provider** | `prism`, with a genuine remote provider configured in Prism *and* added to `PRISM_ALLOWED_PROVIDERS` | Leaves the machine. Not available today: Prism's `openai` and `anthropic` providers are mocks |
+| **Prism, local model** | `prism`, and the response's `provider_used` is a local provider (`ollama`) | Prism (Docker, this machine) → Ollama on this machine; also held in Prism's Redis cache |
+| **Prism, remote provider** | `prism`, with a genuine remote provider configured in Prism *and* added to `PRISM_ALLOWED_PROVIDERS` | Leaves the machine. **Not available today:** Prism's `openai` and `anthropic` providers are mocks |
 
-Every result records the mode of each call (`inference_mode`) from what the
-gateway reported, not from configuration alone.
+Each call's `inference_mode` is recorded from what the gateway reported, not
+from configuration alone. All verified runs were **Prism, local model**.
 
 ### What Prism stores
 
 From Prism's source (`src/prism/api/chat.py`, `core/cache.py`, `db/models.py`):
 
-- **Response cache:** the full response for every successful request is stored
-  in Redis for **1 hour**, keyed by a hash of model, messages and temperature.
-  RAGBase responses are derived from document content, so document-derived text
-  sits in Redis for that hour.
+- **Response cache:** the full response to every successful request is stored in
+  Redis for **1 hour**, keyed by a hash of model, messages and temperature.
+  RAGBase responses are derived from document content, so document-derived
+  text sits in Redis for that hour.
 - **Request log (Postgres):** metadata only — key, virtual model, provider,
   cache/fallback flags, token counts, cost, latency, status, guardrail reason.
   Prompts and responses are not written to the log.
-- **Guardrail scan:** Presidio and regex checks run in-process on the full
-  prompt (system, evidence and question). Nothing is sent elsewhere.
+- **Guardrail scan:** Presidio + regex checks run in-process on the full prompt
+  (system, evidence and question). Nothing is sent elsewhere.
 - **Tracing:** OpenTelemetry instruments HTTP requests (method, route, status,
-  timing); request bodies are not added to spans by Prism's code.
+  timing); Prism's code does not add request bodies to spans.
 
 ## Provider verification (fail closed)
 
-RAGBase accepts a Prism response only when `prism_metadata.provider_used` names
-a provider in `PRISM_ALLOWED_PROVIDERS` (default `ollama`). It rejects, with
-`ProviderRejectedError`, and discards the text of:
+A Prism response is accepted only when `prism_metadata.provider_used` names a
+provider in `PRISM_ALLOWED_PROVIDERS` (default `ollama`). Otherwise RAGBase
+raises `ProviderRejectedError` and discards the text:
 
-- responses from any other provider — including Prism's `openai` and
-  `anthropic` **mocks**, which the `fast` route falls back to when Ollama fails;
-- **cache hits** (`provider_used: "cache"`), because Prism does not record
-  which provider produced a cached response;
-- responses with missing or empty provider metadata.
+| Case | Verified against real Prism |
+|---|---|
+| Provider outside the allowlist (Prism's `mock-fast` route → mock `openai`) | yes — rejected |
+| Cache hit (`provider_used: "cache"`; Prism does not record the original provider) | yes — rejected |
+| Missing / empty provider metadata | mocked tests only |
+| Mock-looking payload from an allowed provider (second line of defence) | mocked tests only |
 
-Mock-looking payloads (`[mock … response]`, `chatcmpl-mock` IDs) are also
-rejected, as a second line of defence. A rejected response never reaches
-answer synthesis or verification: planning or synthesis ends the run as
-`failed`; a rejected verifier response leaves the answer `not_verified`.
+A rejected response never reaches answer synthesis or verification: planning
+or synthesis ends the run as `failed`; a rejected verifier response leaves the
+answer `not_verified`.
 
-**Consequence:** repeating an identical request within an hour is served from
-Prism's cache and therefore rejected. Different questions are unaffected;
-repeated evaluation runs are.
+**Cache limitation:** an identical request repeated within Prism's one-hour
+cache window is served from cache and therefore rejected. Different questions
+are unaffected; repeating the same question (including re-running the same
+test or evaluation) fails until the cache entry expires. RAGBase does not alter
+requests to avoid the cache.
+
+## Citation format and gateway guardrails
+
+RAGBase's evidence citations were changed for Prism compatibility:
+
+- **Before:** `[E1]`, with evidence rendered as `<doc id="E1" …>`. `E1` matched
+  Presidio's `US_DRIVER_LICENSE` recognizer (score 0.3), and Prism blocks on any
+  match, so **100% of evidence prompts were blocked**.
+- **Candidates rejected:** `E-1`, `doc1`, `src1`, `EV1`, … were still tagged as
+  `PERSON` by spaCy in some contexts; `#1` scanned clean but lowered citation
+  quality with `llama3.2`.
+- **Now:** plain numbered citations — `[1]`, `[2, 3]` — with the id attribute
+  placed last: `<doc source="…" location="…" id="1">` (`<doc id="…"` was
+  itself tagged as a person). Scanned clean with Prism's guardrail across IDs
+  1–60 in every prompt pattern. Model output in older styles (`[E1]`, `[E-1]`,
+  `[#1]`) is normalized to `[1]`. Chunk IDs and indexes are unchanged.
+
+**Citation quality** (live `llama3.2`, 10 questions × 2 runs, same session):
+
+| | Before (`E1`) | After (`[n]`) |
+|---|---|---|
+| Standard RAG — citation check passed | 20/20 | 20/20 |
+| Standard RAG — mean claim citation coverage | 0.82–0.83 | 0.86–0.87 |
+| Agentic RAG — verified / qualified / citations valid | 2–3 / 4 / 20 of 20 | 2 / 4 / 20 of 20 |
+
+With numeric IDs the verifier initially left `evidence_ids` empty; verdicts now
+must list the evidence they checked, which restored parity.
+
+**Structured output** also had to change: the words "JSON" and "Respond" and
+raw JSON-schema text were tagged as `PERSON`, blocking every structured call
+(planner, verifier, abstention check, tabular). The adapter now sends a
+plain-language field list (enums as `a|b|c`). Measured directly against Ollama,
+prompted JSON (as Prism requires) was valid on the first attempt in 15/16
+planner/verifier calls versus 16/16 with native schema decoding; the one
+repair attempt recovered the remaining case. One live agent run still saw a
+verifier output fail both attempts and was recorded as `not_verified`.
+
+## Guardrail behaviour
+
+Measured two ways: in-process with Prism's own `scan_prompt` on the exact
+prompts the adapter sends (`scripts/prism/scan_guardrails.py`), and over HTTP
+against the running gateway (live tests and demo).
+
+| Content | Result |
+|---|---|
+| Policy text without personal data (all prompt roles) | passes |
+| Synthetic travel-policy corpus, standard RAG prompts | 0/6 blocked |
+| Names (`named_approvers.txt`) | blocked — PERSON *(verified over HTTP)* |
+| Emails and phone numbers | blocked — EMAIL_ADDRESS, PHONE_NUMBER |
+| IP addresses | blocked — IP_ADDRESS |
+| Licence number in a document | blocked — US_DRIVER_LICENSE |
+| "Ignore previous instructions…" inside a document | blocked — prompt injection |
+| Benign "you are now eligible…" | blocked — prompt injection (false positive) |
+| Driver's manual, 6 questions | 3/6 blocked — PERSON |
+| Novel corpus (1,200 documents), 30 questions | 29/30 blocked — PERSON (28), injection (1) |
+| Random letter-digit codes in a question (e.g. hex IDs, SKUs) | can be blocked — US_DRIVER_LICENSE *(seen over HTTP)* |
+
+Blocking is Prism's designed behaviour for a gateway protecting user input.
+RAGBase reports the reason and does not redact, bypass or alter content.
+Documents that mention people cannot currently be used through Prism.
 
 ## Request fields and capabilities
 
-Prism's `/v1/chat/completions` accepts only `model`, `messages`,
-`temperature` and `stream` (non-streaming only). Other fields are dropped, so:
+Prism's `/v1/chat/completions` accepts only `model`, `messages`, `temperature`
+and `stream` (non-streaming only). Other fields are dropped:
 
 | Capability | Direct Ollama | Through Prism |
 |---|---|---|
 | Temperature | sent | **always sent explicitly** (Prism defaults to 0.7) |
-| Structured output | native JSON-schema decoding | **explicit JSON instructions** in the prompt + validation + one repair attempt |
+| Structured output | native JSON-schema decoding | plain-language field list + validation + one repair |
 | Context length | `num_ctx` set by RAGBase (4096) | **not controllable**; Ollama server default (4096 on the test machine) |
 | Max tokens, streaming, tool calls | not used | not supported |
-| Token counts | from Ollama | from Prism's `usage`, when present |
-| Cost, fallback, gateway latency | — | recorded only when Prism reports them |
+| Token counts | from Ollama | from Prism's `usage` |
+| Provider, cost, fallback, gateway latency | — | recorded from `prism_metadata` |
 
-## Guardrail compatibility
+## Measured latency (real gateway)
 
-Measured with Prism's own `scan_prompt` function run in-process from Prism's
-environment (`scripts/prism/scan_guardrails.py`), on the exact prompts RAGBase
-builds (`scripts/prism/build_guardrail_prompts.py`). This measures the
-guardrail decision only, not HTTP behaviour.
+`scripts/prism/live_demo.py`, three Standard RAG questions, each asked once
+through Prism and once directly, `llama3.2:3b`, Apple M4 Pro
+([`prism_results/prism_live_demo.json`](prism_results/prism_live_demo.json)):
 
-**Finding 1 — every evidence prompt is blocked.** RAGBase's evidence IDs
-(`E1`, `E2`, …) match Presidio's `US_DRIVER_LICENSE` recognizer (score 0.3),
-and Prism blocks on any match. Prompts without evidence (the planner) pass.
+| Question | Answer tokens (Prism / direct) | LLM call via Prism | Prism-reported gateway latency | Direct call |
+|---|---|---|---|---|
+| Expense deadline | 30 / 27 | 1.06 s | 978 ms | 0.32 s |
+| Hotel approval threshold | 29 / 29 | 0.51 s | 426 ms | 0.34 s |
+| Leave carry-over | 26 / 26 | 0.88 s | 802 ms | 0.31 s |
 
-| Corpus (standard RAG prompts) | Blocked |
-|---|---|
-| Synthetic travel policies (no personal data), 6 questions | 6/6 |
-| Driver's manual, 6 questions | 6/6 |
-| 1,200-document novel corpus, 30 questions | 30/30 |
-| Synthetic guardrail fixtures, all roles with evidence | 21/21 |
+Median end to end (retrieval + call): 0.99 s via Prism vs 0.35 s direct. With
+answer lengths matched, Prism added roughly 0.2–0.75 s per call in this setup
+(guardrail scan, database and cache writes, Docker networking). Three samples
+only; treat as indicative. The two agentic questions through Prism each made
+5 model calls (one refinement round) and took 10.2 s and 11.0 s; both ended
+`qualified` because the 3B model's answers contained contradictory statements
+that verification flagged.
 
-**Finding 2 — with a non-matching ID format, content still decides.** Rewriting
-the IDs to `E-1` style before scanning (measurement only; RAGBase still sends
-`E1`) gives:
+## Long-context behaviour (Prism request shape, not through Prism)
 
-| Corpus | Blocked | Reasons |
-|---|---|---|
-| Synthetic travel policies | 0/6 | — |
-| Driver's manual | 3/6 | PERSON |
-| Novel corpus | 29/30 | PERSON (28), prompt injection (1) |
-| Fixture: plain policy | pass | — |
-| Fixture: named approvers | blocked | PERSON |
-| Fixture: emails / phone | blocked | EMAIL_ADDRESS, PHONE_NUMBER |
-| Fixture: IP ranges | blocked | IP_ADDRESS |
-| Fixture: licence number | blocked | US_DRIVER_LICENSE |
-| Fixture: "ignore previous instructions" in a document | blocked | prompt injection |
-| Fixture: benign "you are now eligible…" | blocked | prompt injection (false positive) |
-
-Blocking is the designed behaviour for a gateway protecting user input; it
-means ordinary documents that mention people cannot be used through Prism as
-configured. RAGBase reports the block reason and does not redact or bypass.
-
-**Options (each needs separate approval):**
-
-1. *RAGBase:* change the evidence-ID format (e.g. `E-1`) so citations stop
-   matching the licence pattern. Unblocks documents without personal data;
-   requires re-checking prompt behaviour with the local model.
-2. *Prism:* a narrowly scoped, authenticated per-key guardrail policy for
-   document-grounded applications (for example a score threshold, or scanning
-   only the user's question rather than retrieved evidence). Needed for
-   documents that mention people.
-
-## Long-context behaviour
-
-`scripts/prism/context_probe.py` plants one fact in the first passage and one
-in the last, inside neutral filler, and asks for both. `ollama-openai`
-replicates Prism's upstream request exactly (no context option) without going
-through Prism; `ollama-native` is RAGBase's direct call.
+Measured before the real gateway was available, by replicating Prism's upstream
+request directly against Ollama (`scripts/prism/context_probe.py --target ollama-openai`);
+it does not exercise Prism itself. Facts planted in the first and last passage:
 
 | Prompt size | Direct (`num_ctx` 4096) | Prism request shape |
 |---|---|---|
@@ -137,34 +171,37 @@ through Prism; `ollama-native` is RAGBase's direct call.
 | ~4,000 tokens | start found, end missed | identical |
 | ≥ ~5,400 tokens | **both lost; prompt cut to ~2,050 tokens** | identical |
 
-- Up to 4,096 tokens the two paths behave identically. The misses below that
-  size are not monotonic in length, so they reflect the 3B model, not truncation.
-- Above the context size, Ollama truncates silently and still returns success
-  (both paths). Through Prism, RAGBase cannot raise the limit; it depends on the
-  Ollama server's default (`OLLAMA_CONTEXT_LENGTH`).
-- RAGBase's default prompts stay well below the limit (at most 12 evidence
-  chunks of 512 characters, roughly 2,000 tokens with instructions).
+Below the context size the misses are not monotonic in length (the 3B model,
+not truncation). Above it Ollama truncates silently on both paths. RAGBase's
+default prompts stay around 2,000 tokens at most.
 
 ## Running against a real Prism (optional)
 
-Prerequisites: Docker, the Prism repository, Ollama on the host with
-`llama3.2:3b` pulled.
+Prerequisites: Docker Desktop, the Prism repository, Ollama on the host with
+`llama3.2:3b` pulled. No Prism files need editing.
 
-1. **Prism's own `.env`** (in the Prism repo, never committed): the app container
-   must reach Ollama on the host, so set
-   `OLLAMA_BASE_URL=http://host.docker.internal:11434`. If it points at
-   `localhost`, Prism falls back to its mock providers and RAGBase will reject
-   every response (which also demonstrates fail-closed behaviour).
+1. **Host networking.** Prism's container must reach Ollama on the host. If
+   Prism's `.env` sets `OLLAMA_BASE_URL=http://localhost:11434`, override it for
+   the app container with a compose override file kept outside the Prism repo:
+   ```yaml
+   # prism-override.yml
+   services:
+     app:
+       environment:
+         OLLAMA_BASE_URL: http://host.docker.internal:11434
+   ```
+   Without this, Prism falls back to its mock providers and RAGBase rejects
+   every response.
 2. **Start Prism** (from the Prism repo):
    ```bash
-   docker compose up -d
+   docker compose -f docker-compose.yml -f /path/to/prism-override.yml up -d --build app
    ```
-3. **Run migrations** from the host (the app image does not contain Alembic files):
+3. **Migrations** from the host (the app image does not contain Alembic files):
    ```bash
-   POSTGRES_HOST=localhost uv run alembic upgrade head
+   POSTGRES_HOST=localhost .venv/bin/alembic upgrade head
    ```
-4. **Create a test team and API key** with your admin secret (keep it out of
-   shell history, e.g. `read -s PRISM_ADMIN_SECRET`):
+4. **Create a test team and API key** with your admin secret, without echoing it
+   (e.g. `read -s PRISM_ADMIN_SECRET`):
    ```bash
    curl -s -X POST localhost:8000/admin/teams \
      -H "Authorization: Bearer $PRISM_ADMIN_SECRET" -H "Content-Type: application/json" \
@@ -178,13 +215,26 @@ Prerequisites: Docker, the Prism repository, Ollama on the host with
    PRISM_API_KEY=<key from step 4>
    PRISM_BASE_URL=http://localhost:8000
    ```
-6. **Run the live tests and probes** (from the RAGBase repo):
+6. **Run** (from the RAGBase repo):
    ```bash
    set -a; source .env; set +a
    pytest -m prism -v -rs
-   python scripts/prism/context_probe.py --target prism --sizes 2,12,30
+   python scripts/prism/live_demo.py --out /tmp/prism_demo.json
    python -m agent --backend prism --index-dir <index> "What is the daily meal allowance?"
    ```
 
-`pytest -m prism` reports **skipped** when Prism or the key is missing; a
-skipped run is not a verified integration.
+`pytest -m prism` reports **skipped** when Prism or the key is missing, and
+skips fixed-prompt tests that Prism answers from cache on a re-run; neither
+counts as a verified integration.
+
+## Possible later Prism changes (not made; would need approval)
+
+1. Record the originating provider on cache entries, so cached responses can be
+   attributed and accepted.
+2. A narrowly scoped per-key guardrail policy for document-grounded clients
+   (for example a score threshold, or scanning the user's question rather than
+   retrieved evidence), so documents mentioning people can be used.
+3. Pass through a context-length option (or document the Ollama default) for
+   long-context requests.
+4. Native structured output (pass `format`/`response_format` to providers that
+   support it).
