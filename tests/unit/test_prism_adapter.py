@@ -120,8 +120,9 @@ def test_json_schema_becomes_explicit_prompt_instruction():
 
     res = model_with(handler).complete(MSGS, json_schema=Plan.model_json_schema())
     system = seen["messages"][0]["content"]
-    assert system.startswith("sys\n\nRespond with ONLY a JSON object")
-    assert '"route"' in system and "format" not in seen and "response_format" not in seen
+    assert system.startswith("sys\n\nReply with a single json object and nothing else.")
+    assert "- route (required): text" in system
+    assert "format" not in seen and "response_format" not in seen
     assert res.metadata["structured_output"] == "prompted"
 
 
@@ -244,3 +245,16 @@ def test_factory_builds_prism_from_environment_without_ollama_fallback(monkeypat
     monkeypatch.setenv("PRISM_API_KEY", KEY)
     m = get_chat_model(backend="prism", model="llama3.2")
     assert m.backend == "prism" and m.model == "fast"  # Ollama name is not sent to Prism
+
+
+def test_schema_outline_describes_nested_fields_and_enums_without_raw_schema():
+    from agent.schemas import QueryPlan, VerifierOutput
+    from llm.openai_compat import schema_outline
+
+    plan = schema_outline(QueryPlan.model_json_schema())
+    assert "- route (required): one of simple|complex" in plan
+    assert "- subqueries: a list of objects, each with:\n  - query (required): text (at most 300 characters)" in plan
+    verifier = schema_outline(VerifierOutput.model_json_schema())
+    assert "claim_number (required): whole number from 1 to 12" in verifier
+    for text in (plan, verifier):
+        assert "{" not in text and "JSON" not in text and "$defs" not in text

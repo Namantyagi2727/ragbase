@@ -58,7 +58,7 @@ def test_agent_completes_through_prism_and_reports_gateway_metadata():
     assert len(prism.requests) == 3 == result.llm_calls
     assert all("temperature" in b for b in prism.requests)
     assert [b["temperature"] for b in prism.requests] == [0.0, 0.1, 0.0]  # planner, synth, verifier
-    assert "Respond with ONLY a JSON object" in prism.requests[0]["messages"][0]["content"]
+    assert "Reply with a single json object" in prism.requests[0]["messages"][0]["content"]
 
 
 def _mock(content="[mock openai response]", provider="openai"):
