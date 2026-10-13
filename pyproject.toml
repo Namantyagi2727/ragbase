@@ -4,6 +4,7 @@ addopts = "-ra"
 markers = [
     "integration: uses real embedding / reranker models (downloaded from Hugging Face on first run)",
     "live: requires a running Ollama server; excluded from CI by default",
+    "prism: requires a running Prism gateway and PRISM_API_KEY; skipped otherwise",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
