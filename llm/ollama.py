@@ -93,4 +93,8 @@ class OllamaChatModel:
             latency_s=latency,
             prompt_tokens=data.get("prompt_eval_count"),
             completion_tokens=data.get("eval_count"),
+            metadata={
+                "inference_mode": "local_direct",
+                "structured_output": "native" if json_schema is not None else None,
+            },
         )

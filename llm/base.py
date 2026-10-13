@@ -45,6 +45,31 @@ class LLMResponseError(LLMError):
     """The backend responded with an error or a malformed payload."""
 
 
+class LLMAuthError(LLMError):
+    """The backend rejected the credentials."""
+
+
+class LLMRateLimitError(LLMError):
+    """The backend refused the request because a rate limit was exceeded."""
+
+
+class LLMGuardrailError(LLMResponseError):
+    """A gateway guardrail blocked the request; nothing was generated."""
+
+    def __init__(self, reason: str):
+        super().__init__(f"request blocked by gateway guardrail: {reason}")
+        self.reason = reason
+
+
+class ProviderRejectedError(LLMResponseError):
+    """The response cannot be attributed to an allowed, genuine provider.
+
+    Raised for mock providers, providers outside the allowlist, and responses
+    whose metadata does not establish the provider (fail closed). The rejected
+    text is discarded and never returned to callers.
+    """
+
+
 @runtime_checkable
 class ChatModel(Protocol):
     backend: str
