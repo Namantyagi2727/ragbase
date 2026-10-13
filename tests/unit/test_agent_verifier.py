@@ -45,25 +45,39 @@ def _assess(answer, verdicts=None, recommendation="accept", **kw):
 
 def test_verdicts_citing_unknown_evidence_are_ignored_and_reported():
     v = _assess("The adult limit is 0.08 percent [E1].",
-                [{"claim": "x", "status": "supported", "evidence_ids": ["E7"]}])
+                [{"claim_number": 1, "status": "supported", "evidence_ids": ["E7"]}])
     assert v.grounding == "not_verified"
     assert any("unknown evidence E7" in i for i in v.issues)
 
 
 def test_partial_support_requests_revision():
     v = _assess("The adult limit is 0.08 percent [E1].",
-                [{"claim": "x", "status": "partially_supported", "evidence_ids": ["E1"]}])
+                [{"claim_number": 1, "status": "partially_supported", "evidence_ids": ["E1"]}])
     assert v.grounding == "partially_verified" and v.decision == "revise"
 
 
-def test_abstention_with_followup_query_requests_revision():
-    v = _assess("I don't have enough information in the provided documents to answer that.",
-                [], recommendation="insufficient_evidence", followup_query="parking policy")
-    assert v.decision == "revise" and v.followup_query == "parking policy"
+def test_supported_but_incomplete_answer_with_followup_requests_revision():
+    v = _assess("The adult limit is 0.08 percent [E1].",
+                [{"claim_number": 1, "status": "supported", "evidence_ids": ["E1"]}],
+                recommendation="insufficient_evidence", followup_query="limit for drivers under 21")
+    assert v.grounding == "verified" and v.decision == "revise"
+    assert v.followup_query == "limit for drivers under 21"
+
+
+def test_verifier_schema_requires_claim_verdicts():
+    import pydantic
+
+    with pytest.raises(pydantic.ValidationError):
+        VerifierOutput(verdicts=[], recommendation="accept")
 
 
 def test_feedback_lists_concrete_problems():
     v = _assess("Leave accrues at 1.5 days per month [E1].",
-                [{"claim": "Leave accrues", "status": "unsupported", "evidence_ids": ["E1"]}])
+                [{"claim_number": 1, "status": "unsupported", "evidence_ids": ["E1"]}])
     fb = revision_feedback(v)
     assert "not supported by the evidence: Leave accrues" in fb and "1.5" in fb
+
+
+def test_numbers_in_the_cited_source_name_count_as_available():
+    ev = [Evidence("E1", "a", "policy_2023.txt", "txt", "Reports are due within 30 days.")]
+    assert numeric_mismatches("Under the 2023 policy, reports are due within 30 days [E1].", ev) == []

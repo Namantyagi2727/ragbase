@@ -19,8 +19,8 @@ COMPLEX = {
 TWO_FACTS = "In 2023 the meal allowance was 45 dollars [E1]. In 2024 it rose to 60 dollars [E2]."
 ACCEPT = {
     "verdicts": [
-        {"claim": "2023 allowance 45", "status": "supported", "evidence_ids": ["E1"]},
-        {"claim": "2024 allowance 60", "status": "supported", "evidence_ids": ["E2"]},
+        {"claim_number": 1, "status": "supported", "evidence_ids": ["E1"]},
+        {"claim_number": 2, "status": "supported", "evidence_ids": ["E2"]},
     ],
     "recommendation": "accept",
 }
@@ -114,7 +114,7 @@ def test_complex_route_with_no_evidence_abstains_without_calling_the_synthesizer
 
 def test_valid_citations_are_not_enough_when_verifier_finds_unsupported_claims():
     unsupported = {
-        "verdicts": [{"claim": "2024 allowance 60", "status": "unsupported", "evidence_ids": ["E2"]}],
+        "verdicts": [{"claim_number": 2, "status": "unsupported", "evidence_ids": ["E2"]}],
         "recommendation": "revise",
     }
     model = RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[unsupported])
@@ -160,7 +160,7 @@ def test_number_absent_from_cited_evidence_is_caught_deterministically():
 # --- bounded refinement ---------------------------------------------------------
 
 REVISE = {
-    "verdicts": [{"claim": "2024 allowance 60", "status": "unsupported", "evidence_ids": ["E2"]}],
+    "verdicts": [{"claim_number": 2, "status": "unsupported", "evidence_ids": ["E2"]}],
     "followup_query": "2024 hotel approval",
     "recommendation": "revise",
 }
@@ -188,7 +188,7 @@ def test_revision_prompt_carries_verifier_feedback():
     model = RoleModel(planner=[COMPLEX], synth=[synth], verifier=[REVISE, ACCEPT])
     _run(model)
     assert "problems" not in captured[0]
-    assert "not supported by the evidence: 2024 allowance 60" in captured[1]
+    assert "not supported by the evidence: In 2024 it rose to 60 dollars [E2]." in captured[1]
 
 
 @pytest.mark.parametrize("max_revisions", [0, 1, 2])
@@ -259,3 +259,26 @@ def test_agent_has_only_read_only_retrieval_tools():
 def test_tool_rejects_invalid_arguments(kwargs):
     with pytest.raises(ToolError):
         RetrievalTools(MemoryRetriever()).hybrid_search(**kwargs)
+
+
+def test_trace_steps_are_unique_on_the_simple_route():
+    model = RoleModel(planner=[SIMPLE], standard=["Sixty dollars per day [E1]."])
+    result, _ = _run(model, "What is the 2024 meal allowance?")
+    assert [e["step"] for e in result.trace] == [1, 2, 3, 4]
+
+
+def test_file_name_prefixes_are_stripped_from_planned_queries():
+    plan = {"route": "complex", "subqueries": [{"query": "policy_2024.txt: meal allowance"},
+                                                {"query": "handbook annual leave"}]}
+    model = RoleModel(planner=[plan], synth=[TWO_FACTS], verifier=[ACCEPT])
+    _, retriever = _run(model)
+    assert [q for q, _ in retriever.queries] == ["meal allowance", "annual leave"]
+
+
+def test_verdict_for_nonexistent_claim_number_is_ignored():
+    bogus = {"verdicts": [{"claim_number": 9, "status": "supported", "evidence_ids": ["E1"]}],
+             "recommendation": "accept"}
+    model = RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[bogus])
+    result, _ = _run(model)
+    assert result.verification.grounding == "not_verified"
+    assert any("claim 9" in i for i in result.verification.issues)
