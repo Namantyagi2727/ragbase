@@ -164,6 +164,7 @@ def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categor
     md += ["", "## Required regression cases", ""]
     for mo, cases_ in out["required_regressions"].items():
         md.append(f"- {mo}: " + ", ".join(f"{cid} {sum(v)}/{len(v)}" for cid, v in sorted(cases_.items())))
+    md += _supplementary_sections(run_dir)
     md += ["", "## Limitations", "",
            "- Keyword matching is a proxy; paraphrases can be missed and lucky matches counted.",
            "- Small sample (about 40 cases); differences of a few cases are within run-to-run variation.",
@@ -171,3 +172,52 @@ def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categor
            "citations, so citation metrics do not apply to it.",
            ""]
     (run_dir / "report.md").write_text("\n".join(md))
+
+
+def _supplementary_sections(run_dir: Path) -> list[str]:
+    """Verifier challenge, tabular suite and judge results, when present in the run directory."""
+    md: list[str] = []
+    vc_path = run_dir / "verifier_challenge.json"
+    if vc_path.exists():
+        vc = json.loads(vc_path.read_text())
+        c = vc["summary"]["claims"]
+        md += ["", "## Verifier challenge set (fixed answer/evidence pairs)", "",
+               f"Model `{vc['model']}`, {vc['repeats']} repeat(s). Claim-level outcomes vs. labels for support by the cited evidence:", "",
+               "| | Should accept | Should reject |", "|---|---|---|",
+               f"| Accepted | {c['accepted_supported']} | {c['accepted_unsupported (false positive)']} |",
+               f"| Rejected | {c['rejected_supported (false negative)']} | {c['rejected_unsupported']} |",
+               f"| Undecided | {c['undecided_supported']} | {c['undecided_unsupported']} |", "",
+               f"False-positive rate {_fmt(c['false_positive_rate'])} · false-negative rate {_fmt(c['false_negative_rate'])}.",
+               "Answer-level (verified / not verified) by label: " + "; ".join(
+                   f"{k}: {v}" for k, v in vc["summary"]["answers_by_label"].items()),
+               "Required cases: " + ", ".join(f"{k} → {v}" for k, v in vc["summary"]["required"].items())]
+    tab_runs = sorted(run_dir.glob("tabular_run*.json"))
+    if tab_runs:
+        runs = [json.loads(p.read_text()) for p in tab_runs]
+        md += ["", "## Tabular regression suite", "",
+               f"{len(runs)} run(s) with `{runs[0]['model']}`. Security checks are based on sandboxed state and "
+               "patched execution boundaries.", "", "| Case | Passed per run | Outcome (run 1) | Security violations |",
+               "|---|---|---|---|"]
+        for res in runs[0]["results"]:
+            per = [next(r for r in run["results"] if r["case_id"] == res["case_id"]) for run in runs]
+            md.append(f"| {res['case_id']} | {' '.join('✓' if p['passed'] else '✗' for p in per)} | {res['outcome']} | "
+                      f"{sum(len(p['security_violations']) for p in per)} |")
+    judge_path = run_dir / "judge_summary.json"
+    if judge_path.exists():
+        j = json.loads(judge_path.read_text())
+        md += ["", "## LLM judge (supplementary, not ground truth)", "",
+               f"`{j['judge_model']}` (digest `{j.get('judge_model_digest')}`), {j['items']} items × {j['judgments_per_item']} "
+               f"judgment(s), blind to mode. Agreement with the keyword proxy: {_fmt(j['agreement_with_keyword_proxy'])}; "
+               f"self-consistency {_fmt(j['self_consistency'])} (temperature 0, so repeats are expected to agree). "
+               f"Failed judgments: {j['failed_judgments']}.", "",
+               "| Item | Mode | Case | Judge | Keyword proxy | First issue |", "|---|---|---|---|---|---|"]
+        seen = set()
+        for d_ in j["disagreements"]:
+            key = (d_["mode"], d_["case_id"])
+            if key in seen:
+                continue
+            seen.add(key)
+            issue = (d_["issues"] or [""])[0].replace("|", "\\|")
+            md.append(f"| {d_['item']} | {d_['mode']} | {d_['case_id']} | {'pass' if d_['judge_passed'] else 'fail'} | "
+                      f"{'correct' if d_['keyword_correct'] else 'incorrect'} | {issue} |")
+    return md
