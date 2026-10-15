@@ -24,7 +24,7 @@ def load_rows(run_dir: Path) -> tuple[dict, list[dict]]:
     fixed = {}
     for line in (run_dir / "fixed_retrieval.jsonl").read_text().splitlines():
         entry = json.loads(line)
-        fixed[entry["case_id"]] = entry["texts"]
+        fixed[entry["case_id"]] = [{"source": src, "text": txt} for src, txt in zip(entry["sources"], entry["texts"], strict=True)]
     k = meta["config"]["top_k"]
     rows = []
     for line in (run_dir / "records.jsonl").read_text().splitlines():
@@ -85,7 +85,8 @@ def build(run_dir: Path) -> dict:
 def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categories: list[str]) -> None:
     keep = ["mode", "repeat", "case_id", "category", "answerable", "required", "keyword_correct", "facts_covered",
             "facts_total", "forbidden_hits", "abstained", "citation_ids_valid", "citation_coverage", "cited_precision",
-            "fact_evidence_cited", "fixed_hit_at_k", "fixed_recall_at_k", "pool_recall", "pool_size", "numeric_mismatches",
+            "fact_evidence_cited", "shared_recall_at_k", "mode_hit_at_k", "mode_recall_at_k", "pool_recall", "pool_size",
+            "numeric_mismatches",
             "route", "planner_fallback", "status", "revision_count", "llm_calls", "retrieval_calls", "prompt_tokens",
             "completion_tokens", "latency_s", "seed", "error"]
     with open(run_dir / "scored_rows.jsonl", "w") as f:
@@ -95,7 +96,8 @@ def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categor
     with open(run_dir / "summary.csv", "w", newline="") as f:
         cols = ["mode", "n", "keyword_correct", "correct_abstention", "false_abstention", "forbidden_hit_rate",
                 "citation_ids_valid", "citation_coverage", "cited_precision", "fact_evidence_cited",
-                "fixed_recall_at_k", "pool_recall", "pool_size", "llm_calls", "retrieval_calls", "prompt_tokens",
+                "shared_recall_at_k", "mode_hit_at_k", "mode_recall_at_k", "pool_recall", "pool_size", "llm_calls",
+                "retrieval_calls", "prompt_tokens",
                 "completion_tokens", "revision_count", "latency_p50_s", "latency_p95_s", "errors"]
         w = csv.writer(f)
         w.writerow(cols)
@@ -120,8 +122,10 @@ def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categor
               ("false_abstention", "False abstention (answerable)"), ("forbidden_hit_rate", "Asserted a known-wrong fact"),
               ("citation_ids_valid", "Citation IDs valid"), ("cited_precision", "Cited passages contain expected evidence"),
               ("fact_evidence_cited", "Expected facts' evidence cited"), ("citation_coverage", "Claims carrying a citation"),
-              ("fixed_recall_at_k", "Fixed-budget evidence recall@k (shared retriever)"),
-              ("pool_recall", "Evidence recall, all evidence gathered"), ("pool_size", "Passages gathered"),
+              ("shared_recall_at_k", "Reference: shared corrected-retriever recall@k (same for all modes)"),
+              ("mode_hit_at_k", "This mode's hit@k (first k passages it retrieved)"),
+              ("mode_recall_at_k", "This mode's recall@k (first k passages it retrieved)"),
+              ("pool_recall", "Evidence recall, final pool"), ("pool_size", "Passages gathered"),
               ("llm_calls", "Model calls"), ("retrieval_calls", "Retrieval calls"), ("prompt_tokens", "Prompt tokens"),
               ("completion_tokens", "Completion tokens"), ("revision_count", "Revisions"),
               ("latency_p50_s", "Latency p50 (s)"), ("latency_p95_s", "Latency p95 (s)"), ("errors", "Errors")]

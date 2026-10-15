@@ -11,9 +11,10 @@ Four things are measured separately and never merged into one score:
   4. Evidence faithfulness  — deterministic proxy: numbers in cited claims
                               appear in the cited evidence; share of claims cited.
 
-Retrieval is reported two ways: a fixed budget (the shared retriever's top-k for
-the question, identical for every mode) and the total evidence each workflow
-gathered by the time it finished.
+Retrieval is reported three ways, all source-aware: a shared reference (the
+corrected retriever's top-k for the question, identical for every mode); each
+mode's own fixed budget (the first k passages it actually retrieved, in order);
+and each mode's final evidence pool.
 """
 
 from __future__ import annotations
@@ -77,53 +78,70 @@ def acknowledges_missing(answer: str) -> bool:
     return is_abstention(answer) or any(is_absence_statement(s) for s in sentences(answer))
 
 
-def evidence_present(quotes: list[str], texts: list[str]) -> list[bool]:
-    norm_texts = [normalize(t) for t in texts]
-    return [any(normalize(q) in t for t in norm_texts) for q in quotes]
+Item = dict  # {"source": filename, "text": passage}
 
 
-def retrieval_metrics(case: Case, ranked_texts: list[str], k: int) -> dict:
-    """Hit@k, Recall@k and MRR of the expected evidence within a ranked list."""
-    quotes = [e.quote for f in case.expected_facts for e in f.evidence]
-    if not quotes:
+def _expected(case: Case) -> list[tuple[str, str]]:
+    return [(e.source, e.quote) for f in case.expected_facts for e in f.evidence]
+
+
+def evidence_present(expected: list[tuple[str, str]], items: list[Item]) -> list[bool]:
+    """For each expected (source, quote): is it in some item from that same source?
+
+    Matching the text alone would credit an identical sentence found in a
+    different document; the source must match too.
+    """
+    norm = [(it.get("source"), normalize(it.get("text") or "")) for it in items]
+    return [any(src == source and normalize(quote) in text for src, text in norm) for source, quote in expected]
+
+
+def retrieval_metrics(case: Case, ranked: list[Item], k: int) -> dict:
+    """Hit@k, Recall@k and MRR of the expected evidence within the first k ranked items."""
+    expected = _expected(case)
+    if not expected:
         return {"hit_at_k": None, "recall_at_k": None, "mrr": None}
-    top = ranked_texts[:k]
-    found = evidence_present(quotes, top)
-    first = next((i + 1 for i, t in enumerate(top) if any(evidence_present(quotes, [t]))), None)
-    return {
-        "hit_at_k": float(any(found)),
-        "recall_at_k": sum(found) / len(found),
-        "mrr": 1 / first if first else 0.0,
-    }
+    top = ranked[:k]
+    found = evidence_present(expected, top)
+    first = next((i + 1 for i, it in enumerate(top) if any(evidence_present(expected, [it]))), None)
+    return {"hit_at_k": float(any(found)), "recall_at_k": sum(found) / len(found),
+            "mrr": 1 / first if first else 0.0}
 
 
-def pool_recall(case: Case, texts: list[str]) -> float | None:
-    quotes = [e.quote for f in case.expected_facts for e in f.evidence]
-    if not quotes:
+def pool_recall(case: Case, items: list[Item]) -> float | None:
+    expected = _expected(case)
+    if not expected:
         return None
-    found = evidence_present(quotes, texts)
+    found = evidence_present(expected, items)
     return sum(found) / len(found)
 
 
-def citation_relevance(case: Case, cited_texts: list[str]) -> dict:
-    """Do the cited passages contain the expected evidence? (Independent of ID validity.)"""
-    quotes = [e.quote for f in case.expected_facts for e in f.evidence]
-    if not quotes or not cited_texts:
-        return {"cited_precision": None if not cited_texts else 0.0 if quotes else None,
-                "fact_evidence_cited": None if not quotes else 0.0}
-    relevant = [any(evidence_present(quotes, [t])) for t in cited_texts]
-    facts_cited = [any(evidence_present([e.quote for e in f.evidence], cited_texts)) for f in case.expected_facts]
+def citation_relevance(case: Case, cited: list[Item]) -> dict:
+    """Do the cited passages contain the expected evidence, from the expected source?
+
+    Independent of citation ID validity.
+    """
+    expected = _expected(case)
+    if not expected or not cited:
+        return {"cited_precision": None if not cited else 0.0 if expected else None,
+                "fact_evidence_cited": None if not expected else 0.0}
+    relevant = [any(evidence_present(expected, [it])) for it in cited]
+    facts_cited = [any(evidence_present([(e.source, e.quote) for e in f.evidence], cited)) for f in case.expected_facts]
     return {"cited_precision": sum(relevant) / len(relevant),
             "fact_evidence_cited": sum(facts_cited) / len(facts_cited)}
 
 
-def score_record(case: Case, record: dict, fixed_budget_texts: list[str], k: int) -> dict:
-    """All deterministic metrics for one answer."""
+def score_record(case: Case, record: dict, shared_ranked: list[Item], k: int) -> dict:
+    """All deterministic metrics for one answer.
+
+    shared_ranked: the corrected retriever's top-k for the question (the same
+    reference for every mode). Mode-specific retrieval is measured on the
+    record's own evidence, in the order it was retrieved.
+    """
     answer = record.get("answer") or ""
     evidence = record.get("evidence") or []
+    items = [{"source": e.get("source"), "text": e.get("text") or ""} for e in evidence]
     cited_ids = set(record.get("cited_ids") or [])
-    cited_texts = [e["text"] for e in evidence if e.get("eid") in cited_ids]
-    pool_texts = [e["text"] for e in evidence]
+    cited = [{"source": e.get("source"), "text": e.get("text") or ""} for e in evidence if e.get("eid") in cited_ids]
     abstained = bool(record.get("abstained"))
 
     coverage = [fact_covered(f.keywords, answer) for f in case.expected_facts]
@@ -152,12 +170,14 @@ def score_record(case: Case, record: dict, fixed_budget_texts: list[str], k: int
         "citation_coverage": report.get("citation_coverage"),
         # 4. faithfulness proxies
         "numeric_mismatches": record.get("numeric_mismatches"),
-        # retrieval
-        **{f"fixed_{k_}": v for k_, v in retrieval_metrics(case, fixed_budget_texts, k).items()},
-        "pool_recall": pool_recall(case, pool_texts),
-        "pool_size": len(pool_texts),
-        # 2. citation relevance
-        **citation_relevance(case, cited_texts),
+        # retrieval: shared corrected-retriever reference (same for every mode) ...
+        **{f"shared_{k_}": v for k_, v in retrieval_metrics(case, shared_ranked, k).items()},
+        # ... and this mode's own evidence: first k passages, then the final pool
+        **{f"mode_{k_}": v for k_, v in retrieval_metrics(case, items, k).items()},
+        "pool_recall": pool_recall(case, items),
+        "pool_size": len(items),
+        # 2. citation relevance (source-aware)
+        **citation_relevance(case, cited),
     }
     return out
 
@@ -182,7 +202,7 @@ def aggregate(rows: list[dict]) -> dict:
     """Mean metrics over rows (one row = one case x mode x repeat, metrics merged with record fields)."""
     lat = [r["latency_s"] for r in rows if r.get("latency_s") is not None]
     keys = ["keyword_correct", "correct_abstention", "false_abstention", "citation_ids_valid", "citation_coverage",
-            "fixed_hit_at_k", "fixed_recall_at_k", "fixed_mrr", "pool_recall", "pool_size",
+            "shared_recall_at_k", "mode_hit_at_k", "mode_recall_at_k", "mode_mrr", "pool_recall", "pool_size",
             "cited_precision", "fact_evidence_cited", "llm_calls", "retrieval_calls", "prompt_tokens",
             "completion_tokens", "revision_count"]
     out = {k: _mean(r.get(k) for r in rows) for k in keys}
