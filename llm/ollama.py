@@ -28,12 +28,14 @@ class OllamaChatModel:
         num_ctx: int = config.LLM_NUM_CTX,
         timeout_s: float = config.LLM_TIMEOUT_S,
         transport: httpx.BaseTransport | None = None,
+        seed: int | None = None,
     ):
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.temperature = temperature
         self.num_ctx = num_ctx
         self.timeout_s = timeout_s
+        self.seed = seed  # passed to Ollama when set (reproducible sampling for evaluations)
         self._transport = transport
 
     def complete(
@@ -53,6 +55,8 @@ class OllamaChatModel:
                 "num_ctx": self.num_ctx,
             },
         }
+        if self.seed is not None:
+            payload["options"]["seed"] = self.seed
         if json_schema is not None:
             # Ollama constrains decoding to the schema (structured outputs).
             payload["format"] = json_schema
