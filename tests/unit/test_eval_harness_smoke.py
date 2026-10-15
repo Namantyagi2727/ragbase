@@ -191,3 +191,17 @@ def test_calibration_plumbing_reports_false_passes_and_fails():
     # the scripted judge passes everything, so every known-incorrect item is a false pass
     expected_fail = [r["id"] for r in out["results"] if not r["expected_pass"]]
     assert out["false_passes"] == expected_fail and not out["false_fails"]
+
+
+def test_compare_scores_both_runs_with_one_scoring_version(run_dir, tmp_path):
+    from evals import compare
+
+    before = {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()}
+    out = compare.build(run_dir, run_dir, tmp_path / "cmp", labels="1.1")
+    assert {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()} == before
+    assert out["scoring"]["labels"] == "1.1"
+    s = out["summary"]
+    assert s["standard@initial"]["keyword_correct"] == s["standard@postfix"]["keyword_correct"]
+    assert not out["postfix_vs_initial"]["agentic"]["wins"] and not out["postfix_vs_initial"]["agentic"]["losses"]
+    assert set(out["scorer_effect"]) == {"labels 1.0", "labels 1.1", "labels 1.1 + proposed"}
+    assert "Source selection" in (tmp_path / "cmp" / "comparison.md").read_text()

@@ -71,6 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     jud.add_argument("--labels", default="1.0")
     jud.add_argument("--out", default=None, help="write judge outputs here instead of into run_dir")
 
+    cmp_ = sub.add_parser("compare", help="initial vs post-fix results under one scoring version")
+    cmp_.add_argument("--initial", required=True)
+    cmp_.add_argument("--postfix", required=True)
+    cmp_.add_argument("--out", required=True)
+    cmp_.add_argument("--labels", default="1.1")
+    cmp_.add_argument("--include-proposed", action="store_true")
+
     cal = sub.add_parser("judge-calibrate", help="judge known-correct and known-incorrect answers")
     cal.add_argument("--out", required=True)
     cal.add_argument("--model", default="gemma3:12b")
@@ -111,6 +118,13 @@ def main(argv: list[str] | None = None) -> int:
         report.build(Path(args.run_dir), out_dir, labels=args.labels, include_proposed=args.include_proposed,
                      original_from=Path(args.original_from) if args.original_from else None)
         print(f"Report: {out_dir / 'report.md'}")
+        return 0
+
+    if args.cmd == "compare":
+        from evals import compare
+
+        compare.build(Path(args.initial), Path(args.postfix), Path(args.out), args.labels, args.include_proposed)
+        print(f"Comparison: {Path(args.out) / 'comparison.md'}")
         return 0
 
     from llm.ollama import OllamaChatModel
