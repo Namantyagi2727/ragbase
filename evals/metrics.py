@@ -24,7 +24,7 @@ import statistics
 from collections import Counter, defaultdict
 from typing import Iterable
 
-from citations import CITE_RE, Evidence, is_abstention, is_absence_statement
+from citations import CITE_RE, is_absence_statement, is_abstention
 from evals.dataset import Case, normalize
 
 NEGATION_CUE = re.compile(
