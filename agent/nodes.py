@@ -31,6 +31,7 @@ from citations import (
     is_absence_statement,
     normalize_citations,
     split_claims,
+    substantive_clauses,
     validate_citations,
 )
 from llm import ChatModel, LLMError, LLMResult
@@ -112,7 +113,9 @@ def _round_robin_by_source(docs: list) -> list:
 def _partition_claims(answer: str) -> tuple[list[str], list[str]]:
     """(checkable claims, absence statements) of an answer."""
     claims = split_claims(answer)
-    absence = [c for c in claims if is_absence_statement(c)]
+    # A sentence that also states a fact ("X is 16 weeks, but the evidence does not
+    # specify Y") is checked like any other claim; only pure absence statements skip it.
+    absence = [c for c in claims if is_absence_statement(c) and not substantive_clauses(c)]
     return [c for c in claims if c not in absence], absence
 
 
