@@ -1,0 +1,8 @@
+region,vehicle_type,miles,trips,fuel_litres
+EU,van,1200,30,140
+EU,truck,800,10,210
+EU,car,650,25,48
+US,van,1500,40,180
+US,truck,2100,18,520
+APAC,car,900,35,70
+APAC,van,400,12,52

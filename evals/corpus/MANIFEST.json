@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "files": {
+    "corpus/benefits_faq.txt": "edfd299f35228bd1cd1e16758684a6a1becf0c074a16d5807853119f99d00e76",
+    "corpus/driver_safety_handbook.pdf": "608ad93eafb84048dab2842482ef1a0583f31426b3a81a1d7853b97ae47956fe",
+    "corpus/employee_handbook.docx": "b7f546276e5f1a7ffc5b4796c9e8612bf3cb5482b50222915f48d92c155c1b44",
+    "corpus/it_security_policy.pdf": "b68335eb1d0a3bfa7b16533952cc6f2f6ef2de50f10185f5f11f1a651270d412",
+    "corpus/remote_work_addendum_2024.txt": "996cbcaec04eb200b619c00593c7ed8962db95498c79569b049d3f5671ccd659",
+    "corpus/travel_policy_2023.txt": "e4bccc9cfce03be37bcb992b9fd7634a91334011bcc36f3dbb275ff889f1eac0",
+    "corpus/travel_policy_2024.txt": "07592698e8e171956f28d3561cd308eb916e5f66204d9684bd931ccc04e250e3",
+    "corpus/vendor_contract_brightline.pdf": "45c5dc31c12f035a692c4fcaf72ad6205132b084d904cb8c7f8470bceee3db38",
+    "tabular/fleet_usage.csv": "48145af6dbea10c407c9950edd3dc04595b2a5b84257c8bfe9214acafb5575f9"
+  }
+}
