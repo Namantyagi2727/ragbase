@@ -110,6 +110,142 @@ def ocr_image(img: Image.Image) -> str:
 # File loaders  →  List[(text, source_filename, location_hint)]
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Column-aware PDF page text
+# ---------------------------------------------------------------------------
+
+_LINE_TOL = 3.0       # points: words whose tops differ by less are on one line
+_MIN_GUTTER = 12.0    # points: a gap between words must be at least this wide to count as a gap
+_MIN_BAND = 6.0       # points: narrowest empty vertical band (shared by all lines) accepted as a gutter
+_MIN_COLUMN_LINES = 3
+_MIN_WORDS_PER_SEGMENT = 4.0
+
+
+def _group_lines(words: list[dict]) -> list[list[dict]]:
+    lines: list[list[dict]] = []
+    for w in sorted(words, key=lambda w: (round(w["top"], 1), w["x0"])):
+        if lines and abs(w["top"] - lines[-1][0]["top"]) <= _LINE_TOL:
+            lines[-1].append(w)
+        else:
+            lines.append([w])
+    return [sorted(line, key=lambda w: w["x0"]) for line in lines]
+
+
+def _covered_spans(line: list[dict]) -> list[tuple[float, float]]:
+    """Horizontal extent of a line, treating word gaps narrower than a gutter as covered."""
+    spans = [[line[0]["x0"], line[0]["x1"]]]
+    for w in line[1:]:
+        if w["x0"] - spans[-1][1] < _MIN_GUTTER:
+            spans[-1][1] = max(spans[-1][1], w["x1"])
+        else:
+            spans.append([w["x0"], w["x1"]])
+    return [(a, b) for a, b in spans]
+
+
+def _find_gutter(lines: list[list[dict]], width: float) -> Optional[float]:
+    lo, hi = int(width * 0.3), int(width * 0.7)
+    coverage = [0] * (hi - lo + 1)
+    for line in lines:
+        for a, b in _covered_spans(line):
+            for x in range(max(int(a), lo), min(int(b), hi) + 1):
+                coverage[x - lo] += 1
+    least = min(coverage)
+    best, run_start = (0, None), None
+    for i, c in enumerate(coverage + [least + 1]):
+        if c == least and run_start is None:
+            run_start = i
+        elif c != least and run_start is not None:
+            if i - run_start > best[0]:
+                best = (i - run_start, run_start)
+            run_start = None
+    length, start = best
+    # Lines leave a gap of at least _MIN_GUTTER around the band (narrower gaps count
+    # as covered), so even a narrow band is strong evidence. A few lines may cross
+    # it — full-width headings — but not more than a small share of the page.
+    if start is None or length < _MIN_BAND or least > max(1, int(0.15 * len(lines))):
+        return None
+    return lo + start + length / 2
+
+
+def _split_line(line: list[dict], gutter: float):
+    """(left words, right words) if the line divides cleanly at the gutter, else None."""
+    spans = _covered_spans(line)
+    if any(a < gutter < b for a, b in spans):
+        return None  # crosses the gutter: full-width text
+    left = [w for w in line if w["x1"] <= gutter]
+    right = [w for w in line if w["x0"] >= gutter]
+    for side in (left, right):
+        if side and len(_covered_spans(side)) > 1:
+            return None  # several cells on one side: a table row
+    return left, right
+
+
+def _words_text(words: list[dict]) -> str:
+    return " ".join(w["text"] for w in words)
+
+
+def page_text(page) -> tuple[str, str]:
+    """Text of a PDF page and the layout used ("single" or "columns").
+
+    Two-column passages are read left column then right column; full-width
+    lines (headings) and table rows stay whole. When the layout is not clearly
+    two-column, pdfplumber's own extraction is returned unchanged.
+    """
+    default = page.extract_text() or ""
+    words = page.extract_words()
+    if len(words) < 20:
+        return default, "single"
+    lines = _group_lines(words)
+    gutter = _find_gutter(lines, float(page.width))
+    if gutter is None:
+        return default, "single"
+
+    # Consecutive cleanly-splitting lines form candidate column blocks. A vertical
+    # gap well beyond normal line spacing (e.g. before a new section) ends a block.
+    steps = sorted(b[0]["top"] - a[0]["top"] for a, b in zip(lines, lines[1:], strict=False))
+    leading = steps[len(steps) // 2] if steps else 0.0
+    items: list = []          # ("line", words) or ("block", [(left, right), ...])
+    run: list = []
+    prev_top = None
+    for line in lines:
+        split = _split_line(line, gutter)
+        big_gap = prev_top is not None and line[0]["top"] - prev_top > 2.5 * leading
+        prev_top = line[0]["top"]
+        if split is not None and not (big_gap and run):
+            run.append(split)
+            continue
+        if split is not None:  # big gap: close the current block, start a new one
+            items.append(("block", run))
+            run = [split]
+            continue
+        if run:
+            items.append(("block", run))
+            run = []
+        items.append(("line", line))
+    if run:
+        items.append(("block", run))
+
+    def qualifies(block) -> bool:
+        both = sum(1 for left, right in block if left and right)
+        segments = [s for pair in block for s in pair if s]
+        mean_words = sum(len(s) for s in segments) / len(segments)
+        return both >= _MIN_COLUMN_LINES and mean_words >= _MIN_WORDS_PER_SEGMENT
+
+    if not any(kind == "block" and qualifies(content) for kind, content in items):
+        return default, "single"
+
+    out: list[str] = []
+    for kind, content in items:
+        if kind == "line":
+            out.append(_words_text(content))
+        elif qualifies(content):
+            out += [_words_text(left) for left, _ in content if left]
+            out += [_words_text(right) for _, right in content if right]
+        else:
+            out += [_words_text(left + right) for left, right in content]
+    return "\n".join(out), "columns"
+
+
 def load_doc(path: str, warnings: Optional[list[str]] = None) -> list[tuple[str, str, str]]:
     """Load a single file and return raw (text, source, loc) tuples.
 
@@ -128,7 +264,7 @@ def load_doc(path: str, warnings: Optional[list[str]] = None) -> list[tuple[str,
                     f"{fn}: {len(pdf.pages)} pages; only the first {config.MAX_PDF_PAGES} were indexed"
                 )
             for i, page in enumerate(pdf.pages[: config.MAX_PDF_PAGES], start=1):
-                text = page.extract_text() or ""
+                text, _layout = page_text(page)
                 if not text.strip():
                     if ocr_pages >= config.MAX_OCR_PAGES:
                         continue

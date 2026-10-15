@@ -1,0 +1,43 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 1262 >>
+stream
+BT /F1 10 Tf 72 720 Td (Northwind Analytics - IT Security Policy) Tj ET
+BT /F1 10 Tf 72 699.2 Td (Passwords. Passwords must be at least 14 characters long and must not reuse any of the) Tj ET
+BT /F1 10 Tf 72 686.2 Td (previous five passwords. Passwords must be changed immediately if a compromise is suspected.) Tj ET
+BT /F1 10 Tf 72 665.4 Td (Multi-factor authentication. Multi-factor authentication is required for email, the VPN and) Tj ET
+BT /F1 10 Tf 72 652.4 Td (all administrative consoles.) Tj ET
+BT /F1 10 Tf 72 631.6 Td (Devices. Company laptops must use full-disk encryption. Screens must lock automatically) Tj ET
+BT /F1 10 Tf 72 618.6 Td (after 5 minutes of inactivity. USB storage devices are blocked by default; exceptions) Tj ET
+BT /F1 10 Tf 72 605.6 Td (require approval from the security team.) Tj ET
+BT /F1 10 Tf 72 584.8 Td (Incidents. Lost or stolen devices must be reported to the IT service desk within 24 hours.) Tj ET
+BT /F1 10 Tf 72 571.8 Td (Suspected phishing emails must be reported using the report button in the mail client.) Tj ET
+BT /F1 10 Tf 72 551 Td (Training. All employees must complete security awareness training once a year. New employees) Tj ET
+BT /F1 10 Tf 72 538 Td (must complete it within their first 30 days.) Tj ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000185 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1625
+%%EOF

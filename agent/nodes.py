@@ -21,6 +21,7 @@ from agent.prompts import (
     verifier_messages,
 )
 from agent.schemas import AbstentionCheck, QueryPlan, VerifierOutput
+from agent.sources import SourceSelection, select_compare_sources
 from agent.state import AgentState, TraceEvent
 from agent.tools import RetrievalTools, ToolError
 from agent.verifier import assess, assess_abstention, revision_feedback
@@ -30,6 +31,7 @@ from citations import (
     is_absence_statement,
     normalize_citations,
     split_claims,
+    substantive_clauses,
     validate_citations,
 )
 from llm import ChatModel, LLMError, LLMResult
@@ -95,10 +97,25 @@ def _clean_query(query: str, documents: list[str]) -> str:
     return " ".join(q.split())
 
 
+def _round_robin_by_source(docs: list) -> list:
+    """Reorder documents so sources alternate, keeping each source's own order."""
+    groups: dict[str, list] = {}
+    for d in docs:
+        groups.setdefault(d.metadata.get("source"), []).append(d)
+    out = []
+    while any(groups.values()):
+        for queue in groups.values():
+            if queue:
+                out.append(queue.pop(0))
+    return out
+
+
 def _partition_claims(answer: str) -> tuple[list[str], list[str]]:
     """(checkable claims, absence statements) of an answer."""
     claims = split_claims(answer)
-    absence = [c for c in claims if is_absence_statement(c)]
+    # A sentence that also states a fact ("X is 16 weeks, but the evidence does not
+    # specify Y") is checked like any other claim; only pure absence statements skip it.
+    absence = [c for c in claims if is_absence_statement(c) and not substantive_clauses(c)]
     return [c for c in claims if c not in absence], absence
 
 
@@ -243,16 +260,30 @@ class AgentNodes:
         seen = {e.chunk_id for e in existing}
         compare = bool(state.get("plan", {}).get("compare_documents"))
 
+        pending = state.get("pending_queries", [])
+        selection: SourceSelection | None = None
+        previous = state.get("source_selections") or []
+        if compare and pending and previous:
+            # Refinement rounds reuse the documents already selected: no second discovery search.
+            selection = SourceSelection(**{**previous[-1], "method": "reused", "retrieval_calls": 0})
+        elif compare and pending:
+            # One relevance-based selection, shared by every subquery; the planner's validated
+            # source names and documents the question names come first.
+            planner_sources = [s for sq in pending for s in sq.get("sources", [])]
+            selection = select_compare_sources(
+                state["question"], tools, planner_sources=planner_sources, max_docs=self.s.max_compare_docs,
+            )
+
         searches: list[tuple[str, list[str], int]] = []
-        for sq in state.get("pending_queries", []):
-            if compare and not sq.get("sources"):
+        for sq in pending:
+            if selection is not None and selection.selected:
                 per_doc_k = max(2, self.s.k_per_query // 2)
-                for doc in tools.list_documents()[: self.s.max_compare_docs]:
+                for doc in selection.selected:
                     searches.append((sq["query"], [doc], per_doc_k))
             else:
                 searches.append((sq["query"], sq.get("sources", []), self.s.k_per_query))
 
-        new_docs = []
+        new_docs: list = []
         log = []
         for query, sources, k in searches:
             try:
@@ -270,18 +301,29 @@ class AgentNodes:
                 "results": len(outcome.documents), "new": len(fresh),
             })
 
+        if selection is not None:
+            # Interleave by source so the evidence cap cannot fill with one document's
+            # passages while another selected document is left out.
+            new_docs = _round_robin_by_source(new_docs)
         room = max(0, self.s.max_evidence - len(existing))
         added = build_evidence(new_docs[:room], start=len(existing) + 1)
-        return {
+        calls = len(searches) + (selection.retrieval_calls if selection else 0)
+        summary = f"Ran {len(searches)} search(es); {len(added)} new passage(s), {len(existing) + len(added)} total"
+        if selection is not None:
+            summary = (f"Selected {len(selection.selected)} document(s) by {selection.method} for comparison; "
+                       + summary[0].lower() + summary[1:])
+        data = {"searches": log, "added": [e.eid for e in added]}
+        if selection is not None:
+            data["source_selection"] = selection.to_dict()
+        update = {
             "evidence": existing + added,
             "pending_queries": [],
-            "retrieval_calls": len(searches),
-            "trace": [self._event(
-                state, "retrieve",
-                f"Ran {len(searches)} search(es); {len(added)} new passage(s), {len(existing) + len(added)} total",
-                searches=log, added=[e.eid for e in added],
-            )],
+            "retrieval_calls": calls,
+            "trace": [self._event(state, "retrieve", summary, **data)],
         }
+        if selection is not None:
+            update["source_selections"] = [selection.to_dict()]
+        return update
 
     def synthesize(self, state: AgentState) -> dict:
         if (stop := self._timed_out(state, "synthesize")):

@@ -116,6 +116,7 @@ def run_agent(
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "llm_meta": [],
+        "source_selections": [],
     }
     try:
         final = build_graph(deps).invoke(initial, config={"recursion_limit": recursion_limit(settings)})
@@ -142,4 +143,5 @@ def run_agent(
         elapsed_s=time.monotonic() - start,
         error=final.get("error"),
         llm_meta=final.get("llm_meta", []),
+        source_selections=final.get("source_selections", []),
     )

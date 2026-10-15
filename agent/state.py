@@ -128,6 +128,7 @@ class AgentState(TypedDict, total=False):
     prompt_tokens: Annotated[int, operator.add]
     completion_tokens: Annotated[int, operator.add]
     llm_meta: Annotated[list[dict[str, Any]], operator.add]   # per successful call
+    source_selections: Annotated[list[dict[str, Any]], operator.add]   # comparison document choices
 
 
 @dataclass
@@ -150,6 +151,7 @@ class AgentResult:
     elapsed_s: float
     error: Optional[str] = None
     llm_meta: list[dict[str, Any]] = field(default_factory=list)
+    source_selections: list[dict[str, Any]] = field(default_factory=list)
 
     def inference_summary(self) -> dict[str, Any]:
         """Backends, providers and gateway figures — only those actually reported."""
@@ -182,6 +184,7 @@ class AgentResult:
             "citations": self.citations.to_dict() if self.citations else None,
             "verification": self.verification.to_dict() if self.verification else None,
             "trace": self.trace,
+            "source_selections": self.source_selections,
             "llm_calls": self.llm_calls,
             "retrieval_calls": self.retrieval_calls,
             "prompt_tokens": self.prompt_tokens,

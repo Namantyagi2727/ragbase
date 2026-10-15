@@ -10,8 +10,8 @@ test results and known limitations.
 | 0 | Repository audit and implementation plan | Done |
 | 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
 | 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — merged ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
-| 2 | Optional Prism gateway integration | Done; verified against a real local Prism — in review ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
-| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Not started |
+| 2 | Optional Prism gateway integration | Done — merged ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
+| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | In progress — corrected labels awaiting final approval; harness built ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
 | 4 | Streamlit integration and public demo | Not started |
 | 5 | Documentation and final review | Not started |
 
@@ -415,6 +415,153 @@ failed both attempts and was recorded as `not_verified`.
 Record the originating provider on cache entries; a per-key guardrail policy
 for document-grounded clients; a context-length pass-through; native
 structured output.
+
+## Phase 3 — Evaluation framework (in progress)
+
+### Two-column PDF extraction
+
+`ingest.page_text()` reads a page column by column only when the layout is
+clearly two-column: an empty vertical band in the middle 30-70% of the page
+(every line leaving a gap of at least 12 pt there), no more than 15% of lines
+crossing it (full-width headings), and a run of at least three lines with
+prose (4+ words per segment on average) on both sides. Table rows (several
+cells on one side) and full-width lines stay whole; a vertical gap above 2.5x
+normal line spacing ends a column block. Every other page keeps pdfplumber's
+original output.
+
+Tests were written first (4 of 6 failed before the change). On real files:
+212 single-column PDFs produce identical text; on the two-column driver's
+manual 66 of 85 pages switch, the penalties table page does not, and the
+under-21 zero-tolerance passage reads in order. Known side effect: a
+right-aligned running header moves to the start of the right column.
+**Previously indexed two-column PDFs must be re-ingested** to benefit; their
+chunk text, and therefore chunk IDs, will change.
+
+### Synthetic corpus and labels
+
+- `evals/build_corpus.py` writes 8 fictional documents (TXT, DOCX, single- and
+  two-column PDF) and a CSV. A SHA-256 manifest is checked in CI; rebuilds made
+  seconds apart were byte-identical after fixing DOCX zip timestamps (an
+  earlier "identical" result had only held within the zip format's 2-second
+  timestamp resolution).
+- 42 RAG cases across 10 categories, each expected fact with an exact evidence
+  quote; 3 required regression cases (under-21 / over-21 / second violation).
+- 20 verifier challenge pairs with per-claim labels, including the Phase 1B
+  false positive in clean and interleaved-extraction form.
+- 9 tabular cases; expected values computed from the CSV by the executor.
+- All labels are `proposed`. CI checks schema, sources, quotes, checksums and
+  computed values — consistency, not correctness.
+- Forbidden-fact patterns are evaluated per sentence with negation skipping;
+  a probe test guards against false matches on correct contrast sentences.
+
+### Label review corrections
+
+Requested after the first review; no other labels changed (verified by diffing
+the label files against the previous commit).
+
+| Case | Change |
+|---|---|
+| VC04 | Claim replaced with a false *maximum* ("the maximum rate eligible for automatic approval is $200"); the original claim ("stays up to $200 are approved") was true when the limit is $250 |
+| VC21 (new) | True within-range counterpart ("a $200 night is approved automatically"), paired with VC04 in a regression test |
+| VC15 | Claims now carry two labels — support by the cited evidence and factual truth; answer labelled `correct_fact_wrong_citation`, counted separately from factually wrong answers |
+| C03 | Reference answer reduced to the current director requirement, matching its evidence |
+| R01, R03 | Evidence quotes extended to include the sentence naming the under-21 group |
+| TB08, TB09 | Explicit passing outcomes and security checks; verified through sandboxed file state and patched execution boundaries |
+
+Every evidence quote is now also checked to sit inside a single chunk of the
+indexed corpus (default chunking), not just in the extracted text.
+
+### Evaluation infrastructure
+
+- `python -m evals run|report|verifier|tabular|judge` (see `evals/__main__.py`).
+- One index per run from the synthetic corpus; fixed-budget retrieval recorded
+  once per question and shared by all modes; per-repeat Ollama seeds;
+  `config.json` with corpus checksum, commit, models, settings, environment.
+- Original-code baseline (`909df31`) runs from a `git archive` in an isolated
+  interpreter (`python -I`), importing no current modules and never the
+  original executable tabular path; it is unseeded (its own `OllamaLLM`).
+- Metrics keep citation validity, citation relevance, keyword-proxy correctness
+  and faithfulness proxies separate; agentic results are split by actual
+  planner route; verifier confusion keeps undecided cases separate.
+- Optional judge (`gemma3:12b`): blind to mode, configurable items and repeats,
+  `--estimate` projects runtime first.
+- Official runs are refused while any selected label is unapproved.
+- A development dry run (2 cases, not a result) caught Ollama being stopped;
+  live runs now preflight the server and model.
+
+### CI
+
+- `ci.yml`: lint; unit tests (now including dataset, metric, tabular-security
+  and mocked harness smoke tests); a separate integration job with real
+  embedding and reranker models and no LLM.
+- `eval-live.yml`: manual trigger only, CPU runner, bounded subset, 90-minute
+  timeout, no secrets or paid inference, no judge; records elapsed time and
+  peak memory. Not yet run: a manually triggered workflow can only be
+  dispatched once the file is on the default branch.
+
+### Initial official benchmark: surprising findings
+
+The first official run (commit `a83197f`, results kept local) completed with
+no errors. Its findings led to the corrective work below; the results remain
+the pre-fix baseline and were not overwritten.
+
+- **Comparison-mode bug in the agent.** For comparison questions the agent
+  searched `list_documents()[:max_compare_docs]`: the first five documents in
+  alphabetical order. With eight documents in the corpus the two travel
+  policies were never searched, so every comparison-mode answer failed and
+  most of the agent's false abstentions came from this. The Phase 1B tests
+  used three documents and never reached the cap. The abstention check
+  "confirmed" these abstentions because it only sees retrieved evidence.
+- **Keyword-proxy false pass (FP01).** Every mode wrote "the policy reduced
+  the allowance from $45 to $60", accepting the false premise; the forbidden
+  pattern only matched the passive voice.
+- **Judge leniency.** The judge passed incomplete answers whose claims were
+  true, and passed a false abstention because the retrieved passages lacked
+  the answer.
+- **Verifier challenge counts** were summed over temperature-0 repeats, which
+  are not independent cases.
+
+### Corrective work (approved after the initial review)
+
+- Comparison-mode document selection (`agent/sources.py`): documents named
+  in the question or by the planner first; otherwise one bounded relevance
+  discovery search; passages interleaved by source before the evidence cap;
+  refinement reuses the selection; limitations recorded in the trace and in
+  benchmark records. Regression tests use nine documents, irrelevant ones
+  sorting first, and similarly named policy versions.
+- Label revisions versioned separately from the approved labels
+  (`evals/label_revisions.jsonl`): FP01 approved; T01, V05, C01 proposed for
+  review. Scoring 1.1 adds optional facts and reproduces the 1.0 scores
+  exactly under labels 1.0.
+- Reports can rescore saved answers into a separate directory at a chosen
+  label version; `python -m evals compare` scores the initial and post-fix
+  results with one scoring version and shows the scorer's effect separately.
+- Judge rubric 2 and 13 calibration answers (see
+  `docs/EVALUATION_CHANGELOG.md`).
+- A post-fix run of Standard and Agentic (same corpus, model digest,
+  configuration and seeds) is stored separately; its results are pending
+  review and are not claimed anywhere.
+
+### Completion pass (approved after the post-fix review)
+
+- Abstention classification: an answer that states facts plus "the evidence
+  does not specify ..." (benchmark case M03) is a substantive answer, not a
+  full abstention; uncited facts are still reported and fail the citation
+  check; sentences mixing a fact with an absence statement go to claim
+  verification. This changed agent behaviour, so a separately labelled
+  controlled run (`final-2026-10-15`) was made with the same configuration
+  and seeds. Standard RAG answers were byte-identical; 17 of 126 Agentic
+  answers changed, all through the modified verification path.
+- Labels 1.2 (T01, V05, C01 contextual facts optional, approved) and 1.3
+  (explicit old → new changes for a narrow comparison-consistency check);
+  scoring 1.2. Saved answers were rescored into separate directories; no
+  earlier result file changed (checked by file hashes).
+- Judge rubric 3 for partially answerable questions, with 22 calibration
+  answers. It fixed the partial-answer false fails of rubric 2 but passed two
+  known-incorrect calibration answers that rubric 2 failed; the rubric was not
+  tuned further. Earlier judgments are kept.
+- Known limitations are listed in `docs/EVALUATION_CHANGELOG.md`. Standard
+  RAG still outperforms Agentic RAG overall on the reviewed benchmark.
 
 ## Carried forward to later phases
 

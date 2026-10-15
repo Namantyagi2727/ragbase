@@ -114,3 +114,22 @@ def test_structured_backend_error_is_not_retried():
     model = FakeChatModel([LLMUnavailableError("down"), '{"route": "x", "n": 1}'])
     res = complete_structured(model, MSGS, Plan)
     assert not res.ok and "LLMUnavailableError" in res.error and res.attempts == 1
+
+
+def test_ollama_seed_is_sent_only_when_set():
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content)["options"])
+        return httpx.Response(200, json={"message": {"content": "ok"}})
+
+    _ollama(handler).complete(MSGS)
+    OllamaChatModel(model="m", base_url="http://ollama.test", seed=7, transport=httpx.MockTransport(handler)).complete(MSGS)
+    assert "seed" not in seen[0] and seen[1]["seed"] == 7
+
+
+def test_caller_timeout_can_shorten_but_not_extend_the_configured_timeout():
+    m = OllamaChatModel(model="m", base_url="http://ollama.test", timeout_s=30)
+    assert m._effective_timeout(None) == 30
+    assert m._effective_timeout(5) == 5
+    assert m._effective_timeout(170) == 30     # the agent's remaining budget must not extend it

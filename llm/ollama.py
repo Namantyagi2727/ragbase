@@ -28,13 +28,19 @@ class OllamaChatModel:
         num_ctx: int = config.LLM_NUM_CTX,
         timeout_s: float = config.LLM_TIMEOUT_S,
         transport: httpx.BaseTransport | None = None,
+        seed: int | None = None,
     ):
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.temperature = temperature
         self.num_ctx = num_ctx
         self.timeout_s = timeout_s
+        self.seed = seed  # passed to Ollama when set (reproducible sampling for evaluations)
         self._transport = transport
+
+    def _effective_timeout(self, timeout_s: float | None) -> float:
+        """A caller's limit (e.g. the agent's remaining budget) can shorten, never extend, the configured timeout."""
+        return min(timeout_s, self.timeout_s) if timeout_s else self.timeout_s
 
     def complete(
         self,
@@ -53,6 +59,8 @@ class OllamaChatModel:
                 "num_ctx": self.num_ctx,
             },
         }
+        if self.seed is not None:
+            payload["options"]["seed"] = self.seed
         if json_schema is not None:
             # Ollama constrains decoding to the schema (structured outputs).
             payload["format"] = json_schema
@@ -60,12 +68,12 @@ class OllamaChatModel:
         start = time.perf_counter()
         try:
             with httpx.Client(
-                timeout=timeout_s or self.timeout_s, transport=self._transport
+                timeout=self._effective_timeout(timeout_s), transport=self._transport
             ) as client:
                 resp = client.post(f"{self.base_url}/api/chat", json=payload)
         except httpx.TimeoutException as e:
             raise LLMTimeoutError(
-                f"Ollama did not respond within {timeout_s or self.timeout_s:.0f}s"
+                f"Ollama did not respond within {self._effective_timeout(timeout_s):.0f}s"
             ) from e
         except httpx.TransportError as e:
             raise LLMUnavailableError(

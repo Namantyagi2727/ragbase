@@ -44,7 +44,7 @@ _ABSTAIN_PATTERNS = [
 # be grounded by citing a passage, so claim verification skips them.
 _ABSENCE_PATTERNS = _ABSTAIN_PATTERNS + [
     re.compile(r"\bnot (?:explicitly |specifically |directly )?(?:stated|mentioned|specified|provided|covered|addressed)\b", re.I),
-    re.compile(r"\b(?:does|do) not (?:provide|include|say|cover|address|give)\b", re.I),
+    re.compile(r"\b(?:does|do) not (?:provide|include|say|cover|address|give|specify|state|mention|contain)\b", re.I),
     re.compile(r"\bno (?:information|mention|details?)\b", re.I),
 ]
 
@@ -164,6 +164,49 @@ def is_absence_statement(claim: str) -> bool:
     return any(p.search(claim) for p in _ABSENCE_PATTERNS)
 
 
+# Clause boundaries inside a sentence: "X, but the evidence does not specify Y".
+_CLAUSE_SPLIT_RE = re.compile(r"\s*(?:;|,?\s+but\s+|,?\s+however,?\s+|,\s+although\s+|,\s+while\s+)\s*", re.I)
+# Clauses that only describe the evidence rather than answer the question,
+# e.g. "the evidence only mentions the reimbursement rate for car use".
+_META_CLAUSE_RE = re.compile(
+    r"^(?:however,?\s*)?(?:the|this|these) (?:provided |retrieved )?(?:evidence|documents?|context|passages?)"
+    r"(?: only)? (?:mentions?|discuss(?:es)?|refers? to|talks? about|covers?|describes?|focus(?:es)? on)\b", re.I)
+_QUOTE_LINE_RE = re.compile(r"^\s*>")
+
+
+def substantive_clauses(text: str) -> list[str]:
+    """Clauses that state something other than "the information is missing".
+
+    A clause is substantive when it is not an absence or abstention statement,
+    not a description of the evidence itself, and has at least four words.
+    Verification notes (lines starting with ">") and source lists after a
+    "Sources:" heading are ignored.
+    """
+    out = []
+    for line in text.splitlines():
+        if _SKIP_LINE_RE.match(line) and len(line.split()) <= 2:
+            break                       # a "Sources:" list follows; it is not an answer
+        if _QUOTE_LINE_RE.match(line):
+            continue
+        for claim in split_claims(line):
+            for clause in _CLAUSE_SPLIT_RE.split(CITE_RE.sub(" ", claim)):
+                clause = clause.strip(" .,")
+                if (len(clause.split()) >= 4 and not is_absence_statement(clause)
+                        and not _META_CLAUSE_RE.search(clause)):
+                    out.append(clause)
+    return out
+
+
+def is_full_abstention(text: str, cited: bool = False) -> bool:
+    """An answer that declines to answer and gives no substantive content.
+
+    An answer with supported facts plus a statement that something is missing
+    is a substantive (possibly partial) answer, even without citations; its
+    missing citations are then reported as uncited claims, not hidden.
+    """
+    return is_abstention(text) and not cited and not substantive_clauses(text)
+
+
 def split_claims(text: str) -> list[str]:
     """Split an answer into sentence-level claims, skipping headings and source lists."""
     normalized = _TRAILING_CITE_RE.sub(r" \2\1", text)
@@ -224,9 +267,10 @@ def validate_citations(answer: str, evidence: list[Evidence]) -> CitationReport:
     known = {e.eid for e in evidence}
     cited = extract_citations(answer)
     claims = split_claims(answer)
-    # An answer that cites evidence is a (possibly partial) answer, not an
-    # abstention, even if one of its sentences says something is missing.
-    abstained = is_abstention(answer) and not cited
+    # An answer that cites evidence, or states substantive facts, is a (possibly
+    # partial) answer, not an abstention, even if one of its sentences says
+    # something is missing.
+    abstained = is_full_abstention(answer, cited=bool(cited))
     return CitationReport(
         cited_ids=cited,
         valid_ids=[c for c in cited if c in known],
