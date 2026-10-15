@@ -11,7 +11,7 @@ test results and known limitations.
 | 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
 | 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — merged ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
 | 2 | Optional Prism gateway integration | Done — merged ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
-| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | In progress — dataset awaiting label review ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
+| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | In progress — corrected labels awaiting final approval; harness built ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
 | 4 | Streamlit integration and public demo | Not started |
 | 5 | Documentation and final review | Not started |
 
@@ -453,6 +453,51 @@ chunk text, and therefore chunk IDs, will change.
   computed values — consistency, not correctness.
 - Forbidden-fact patterns are evaluated per sentence with negation skipping;
   a probe test guards against false matches on correct contrast sentences.
+
+### Label review corrections
+
+Requested after the first review; no other labels changed (verified by diffing
+the label files against the previous commit).
+
+| Case | Change |
+|---|---|
+| VC04 | Claim replaced with a false *maximum* ("the maximum rate eligible for automatic approval is $200"); the original claim ("stays up to $200 are approved") was true when the limit is $250 |
+| VC21 (new) | True within-range counterpart ("a $200 night is approved automatically"), paired with VC04 in a regression test |
+| VC15 | Claims now carry two labels — support by the cited evidence and factual truth; answer labelled `correct_fact_wrong_citation`, counted separately from factually wrong answers |
+| C03 | Reference answer reduced to the current director requirement, matching its evidence |
+| R01, R03 | Evidence quotes extended to include the sentence naming the under-21 group |
+| TB08, TB09 | Explicit passing outcomes and security checks; verified through sandboxed file state and patched execution boundaries |
+
+Every evidence quote is now also checked to sit inside a single chunk of the
+indexed corpus (default chunking), not just in the extracted text.
+
+### Evaluation infrastructure
+
+- `python -m evals run|report|verifier|tabular|judge` (see `evals/__main__.py`).
+- One index per run from the synthetic corpus; fixed-budget retrieval recorded
+  once per question and shared by all modes; per-repeat Ollama seeds;
+  `config.json` with corpus checksum, commit, models, settings, environment.
+- Original-code baseline (`909df31`) runs from a `git archive` in an isolated
+  interpreter (`python -I`), importing no current modules and never the
+  original executable tabular path; it is unseeded (its own `OllamaLLM`).
+- Metrics keep citation validity, citation relevance, keyword-proxy correctness
+  and faithfulness proxies separate; agentic results are split by actual
+  planner route; verifier confusion keeps undecided cases separate.
+- Optional judge (`gemma3:12b`): blind to mode, configurable items and repeats,
+  `--estimate` projects runtime first.
+- Official runs are refused while any selected label is unapproved.
+- A development dry run (2 cases, not a result) caught Ollama being stopped;
+  live runs now preflight the server and model.
+
+### CI
+
+- `ci.yml`: lint; unit tests (now including dataset, metric, tabular-security
+  and mocked harness smoke tests); a separate integration job with real
+  embedding and reranker models and no LLM.
+- `eval-live.yml`: manual trigger only, CPU runner, bounded subset, 90-minute
+  timeout, no secrets or paid inference, no judge; records elapsed time and
+  peak memory. Not yet run: a manually triggered workflow can only be
+  dispatched once the file is on the default branch.
 
 ## Carried forward to later phases
 
