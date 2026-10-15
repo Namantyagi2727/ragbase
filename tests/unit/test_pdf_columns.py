@@ -97,3 +97,17 @@ def test_table_only_page_is_not_treated_as_columns(tmp_path):
     pdf = write_pdf(tmp_path / "pairs.pdf", [lines])
     joined = " ".join(_extract(pdf).split())
     assert "Item 1 3 units Item 2 6 units" in joined  # rows stay paired, not column-major
+
+
+def test_section_heading_after_the_columns_stays_after_both_columns(tmp_path):
+    lines = _two_column_page()
+    y = min(ln.y for ln in lines) - 36
+    lines += [TextLine(72, y, "Inspection schedule", 12)]
+    y -= 20
+    for row in [("Van", "Brakes", "12 months"), ("Truck", "Tyres", "6 months")]:
+        lines += [TextLine(72, y, row[0]), TextLine(250, y, row[1]), TextLine(430, y, row[2])]
+        y -= 14
+    text = " ".join(_extract(write_pdf(tmp_path / "section.pdf", [lines])).split())
+    right_end = text.index(" ".join(RIGHT.split())) + len(" ".join(RIGHT.split()))
+    assert text.index("Inspection schedule") >= right_end
+    assert "Van Brakes 12 months Truck Tyres 6 months" in text

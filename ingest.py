@@ -200,13 +200,23 @@ def page_text(page) -> tuple[str, str]:
     if gutter is None:
         return default, "single"
 
-    # Consecutive cleanly-splitting lines form candidate column blocks.
+    # Consecutive cleanly-splitting lines form candidate column blocks. A vertical
+    # gap well beyond normal line spacing (e.g. before a new section) ends a block.
+    steps = sorted(b[0]["top"] - a[0]["top"] for a, b in zip(lines, lines[1:], strict=False))
+    leading = steps[len(steps) // 2] if steps else 0.0
     items: list = []          # ("line", words) or ("block", [(left, right), ...])
     run: list = []
+    prev_top = None
     for line in lines:
         split = _split_line(line, gutter)
-        if split is not None:
+        big_gap = prev_top is not None and line[0]["top"] - prev_top > 2.5 * leading
+        prev_top = line[0]["top"]
+        if split is not None and not (big_gap and run):
             run.append(split)
+            continue
+        if split is not None:  # big gap: close the current block, start a new one
+            items.append(("block", run))
+            run = [split]
             continue
         if run:
             items.append(("block", run))
