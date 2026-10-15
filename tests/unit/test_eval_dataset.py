@@ -74,7 +74,49 @@ def test_verifier_challenge_claims_split_exactly_as_labelled():
         assert split_claims(v.answer) == [c.text for c in v.claims], v.id
         assert [e.id for e in v.evidence] == [str(i) for i in range(1, len(v.evidence) + 1)], v.id
     assert {"VC01", "VC02", "VC03"} <= {v.id for v in vcs if v.required}
-    assert {v.answer_label for v in vcs} == {"correct", "incorrect"}
+    assert {v.answer_label for v in vcs} == {"correct", "incorrect", "correct_fact_wrong_citation"}
+
+
+def test_answer_labels_are_consistent_with_claim_labels():
+    for v in d.load_verifier_cases():
+        all_true = all(c.factually_true for c in v.claims)
+        all_supported = all(c.label == "supported" for c in v.claims)
+        if v.answer_label == "correct":
+            assert all_true and all_supported, v.id
+        elif v.answer_label == "correct_fact_wrong_citation":
+            assert all_true and not all_supported, v.id
+        else:
+            assert not all_true, v.id
+
+
+def test_subset_truth_is_distinguished_from_false_maximum():
+    """VC04/VC21 regression: 'up to 200 is auto-approved' is true when the limit is 250;
+    'the maximum auto-approved rate is 200' is false. Labels must reflect that."""
+    vcs = {v.id: v for v in d.load_verifier_cases()}
+    false_max, true_subset = vcs["VC04"].claims[0], vcs["VC21"].claims[0]
+    assert "maximum" in false_max.text and false_max.label == "unsupported" and not false_max.factually_true
+    assert vcs["VC04"].answer_label == "incorrect"
+    assert true_subset.label == "supported" and true_subset.factually_true
+    assert vcs["VC21"].answer_label == "correct"
+    assert vcs["VC04"].evidence == vcs["VC21"].evidence
+
+
+def test_correct_fact_with_wrong_citation_is_labelled_separately():
+    vc15 = next(v for v in d.load_verifier_cases() if v.id == "VC15")
+    claim = vc15.claims[0]
+    assert claim.factually_true and claim.label == "unsupported"
+    assert vc15.answer_label == "correct_fact_wrong_citation"
+
+
+def test_every_evidence_quote_sits_inside_one_indexed_chunk(cases):
+    assert d.chunk_problems(cases, d.indexed_chunks()) == []
+
+
+def test_under_21_evidence_states_the_age_group_itself(cases):
+    for cid in ("R01", "R03"):
+        case = next(c for c in cases if c.id == cid)
+        for f in case.expected_facts:
+            assert all("under age 21" in e.quote for e in f.evidence), cid
 
 
 def test_tabular_expected_values_match_the_data():

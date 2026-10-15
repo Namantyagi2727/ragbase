@@ -87,9 +87,19 @@ class ChallengeEvidence(BaseModel):
 
 
 class ChallengeClaim(BaseModel):
+    """One claim with two independent labels.
+
+    label: what the verifier should conclude — is the claim supported by the
+        evidence it *cites*? (citation faithfulness)
+    factually_true: is the claim true according to the corpus, regardless of
+        what it cites? (factual correctness)
+    A true claim with the wrong citation is factually_true=True, label="unsupported".
+    """
+
     model_config = ConfigDict(extra="forbid")
     text: str
     label: Literal["supported", "partially_supported", "unsupported"]
+    factually_true: bool
 
 
 class VerifierCase(BaseModel):
@@ -101,7 +111,10 @@ class VerifierCase(BaseModel):
     question: str
     evidence: list[ChallengeEvidence] = Field(min_length=1)
     claims: list[ChallengeClaim] = Field(min_length=1)
-    answer_label: Literal["correct", "incorrect"]
+    # correct: every claim true and supported by its citation
+    # incorrect: at least one claim false or only partly true
+    # correct_fact_wrong_citation: every claim true, but some citation does not support it
+    answer_label: Literal["correct", "incorrect", "correct_fact_wrong_citation"]
     required: bool = False
     review_status: ReviewStatus = "proposed"
     notes: str = ""
@@ -118,6 +131,10 @@ class TabularFilter(BaseModel):
     value: str | float | int
 
 
+SecurityCheck = Literal["no_code_execution", "no_shell_commands", "no_file_deletion", "no_filesystem_changes"]
+Outcome = Literal["safe_refusal", "allowlisted_query", "expected_value"]
+
+
 class TabularCase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
@@ -127,8 +144,14 @@ class TabularCase(BaseModel):
     expected_column: Optional[str] = None
     expected_filters: list[TabularFilter] = Field(default_factory=list)
     expected_group_by: Optional[str] = None
-    expected_value: Optional[str] = None     # as rendered in the answer, e.g. "2,650"
-    expect_safe_failure_ok: bool = False      # unsafe inputs may legitimately fail closed
+    expected_value: Optional[str] = None     # as rendered in the answer, e.g. "2650"
+    # Outcomes that count as a pass; for ordinary cases only the expected value.
+    acceptable_outcomes: list[Outcome] = Field(default_factory=lambda: ["expected_value"])
+    # Checked through observable state (sandboxed files, patched execution
+    # boundaries), not by reading the response text.
+    security_checks: list[SecurityCheck] = Field(
+        default_factory=lambda: ["no_code_execution", "no_shell_commands", "no_file_deletion", "no_filesystem_changes"]
+    )
     review_status: ReviewStatus = "proposed"
     notes: str = ""
 
@@ -214,4 +237,36 @@ def case_problems(cases: list[Case]) -> list[str]:
                 re.compile(fb.pattern)
             except re.error as e:
                 problems.append(f"{c.id}: invalid forbidden pattern ({e})")
+    return problems
+
+
+def indexed_chunks(corpus_dir: Path = CORPUS_DIR) -> dict[str, list[str]]:
+    """Normalized chunk texts per source, produced by the real ingestion pipeline at default settings.
+
+    Uses fake embeddings (chunking does not depend on them), so it runs without models.
+    """
+    import tempfile
+
+    from langchain_core.embeddings import DeterministicFakeEmbedding
+
+    import ingest
+    import retriever
+
+    with tempfile.TemporaryDirectory() as tmp:
+        ingest.ingest_documents(ingest_dir=str(corpus_dir), index_dir=tmp, embed_model="fake",
+                                embeddings=DeterministicFakeEmbedding(size=8))
+        chunks: dict[str, list[str]] = {}
+        for c in retriever.load_tfidf(tmp)[2]:
+            chunks.setdefault(c["source"], []).append(normalize(c["text"]))
+    return chunks
+
+
+def chunk_problems(cases: list[Case], chunks: dict[str, list[str]]) -> list[str]:
+    """Evidence quotes that do not sit inside a single indexed chunk (unmatchable in retrieval metrics)."""
+    problems = []
+    for c in cases:
+        for f in c.expected_facts:
+            for ev in f.evidence:
+                if not any(normalize(ev.quote) in chunk for chunk in chunks.get(ev.source, [])):
+                    problems.append(f"{c.id}/{f.id}: quote spans a chunk boundary in {ev.source}")
     return problems
