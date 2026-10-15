@@ -113,3 +113,14 @@ def test_official_run_is_refused_while_labels_are_unapproved(tmp_path, capsys):
     assert all(c.review_status == "proposed" for c in load_cases())
     code = cli(["run", "--out", str(tmp_path / "x"), "--label", "official", "--repeats", "1", "--cases", "F01"])
     assert code == 2 and "Refusing an official run" in capsys.readouterr().err
+
+
+def test_preflight_reports_unreachable_ollama(monkeypatch):
+    import httpx
+
+    def down(*a, **k):
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(runner.httpx, "get", down)
+    problem = runner.preflight(runner.EvalConfig(out_dir="x"))
+    assert problem and "not reachable" in problem

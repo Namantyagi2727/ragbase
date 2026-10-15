@@ -89,6 +89,18 @@ def environment(cfg: EvalConfig) -> dict:
     return env
 
 
+def preflight(cfg: EvalConfig) -> Optional[str]:
+    """Problem that would make every live answer fail (server down, model missing), or None."""
+    try:
+        tags = httpx.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=5).json().get("models", [])
+    except httpx.HTTPError:
+        return f"Ollama is not reachable at {config.OLLAMA_BASE_URL} (start it with `ollama serve`)"
+    names = {m["name"] for m in tags} | {m["name"].split(":")[0] for m in tags if m["name"].endswith(":latest")}
+    if cfg.generator_model not in names:
+        return f"model '{cfg.generator_model}' is not available in Ollama (run `ollama pull {cfg.generator_model}`)"
+    return None
+
+
 def build_index(cfg: EvalConfig, run_dir: Path, embeddings=None) -> str:
     index_dir = run_dir / "index"
     if not (index_dir / "index.faiss").exists():

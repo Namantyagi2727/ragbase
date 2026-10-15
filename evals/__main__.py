@@ -80,6 +80,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Refusing an official run: {len(unapproved)} selected case(s) are not approved "
                   f"(e.g. {', '.join(unapproved[:5])}).", file=sys.stderr)
             return 2
+        problem = runner.preflight(cfg)
+        if problem:
+            print(f"Cannot start the run: {problem}", file=sys.stderr)
+            return 3
         runner.run(cfg)
         from evals import report
 
