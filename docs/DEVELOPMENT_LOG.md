@@ -542,6 +542,27 @@ the pre-fix baseline and were not overwritten.
   configuration and seeds) is stored separately; its results are pending
   review and are not claimed anywhere.
 
+### Completion pass (approved after the post-fix review)
+
+- Abstention classification: an answer that states facts plus "the evidence
+  does not specify ..." (benchmark case M03) is a substantive answer, not a
+  full abstention; uncited facts are still reported and fail the citation
+  check; sentences mixing a fact with an absence statement go to claim
+  verification. This changed agent behaviour, so a separately labelled
+  controlled run (`final-2026-10-15`) was made with the same configuration
+  and seeds. Standard RAG answers were byte-identical; 17 of 126 Agentic
+  answers changed, all through the modified verification path.
+- Labels 1.2 (T01, V05, C01 contextual facts optional, approved) and 1.3
+  (explicit old → new changes for a narrow comparison-consistency check);
+  scoring 1.2. Saved answers were rescored into separate directories; no
+  earlier result file changed (checked by file hashes).
+- Judge rubric 3 for partially answerable questions, with 22 calibration
+  answers. It fixed the partial-answer false fails of rubric 2 but passed two
+  known-incorrect calibration answers that rubric 2 failed; the rubric was not
+  tuned further. Earlier judgments are kept.
+- Known limitations are listed in `docs/EVALUATION_CHANGELOG.md`. Standard
+  RAG still outperforms Agentic RAG overall on the reviewed benchmark.
+
 ## Carried forward to later phases
 
 ### Required evaluation regression cases (Phase 3)
