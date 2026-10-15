@@ -778,7 +778,7 @@ def _render_sources(sources: list, warnings: list) -> None:
     with st.expander(label):
         for s in sources:
             loc_html = f'<div class="rb-source-loc">@ {html.escape(s["loc"])}</div>' if s["loc"] else ""
-            eid_html = f'<span class="rb-eid">{html.escape(s["eid"])}</span>' if s.get("cited") else ""
+            eid_html = f'<span class="rb-eid">[{html.escape(s["eid"])}]</span>' if s.get("cited") else ""
             st.markdown(
                 f'<div class="rb-source{"" if s.get("cited") else " uncited"}">'
                 f'<div class="rb-source-path">'

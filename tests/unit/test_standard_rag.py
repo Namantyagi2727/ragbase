@@ -32,26 +32,26 @@ def _run(reply, docs=DOCS):
 
 
 def test_prompt_includes_evidence_ids_and_source_identifiers():
-    _, model = _run("The allowance is 45 dollars per day [E1].")
+    _, model = _run("The allowance is 45 dollars per day [1].")
     prompt = "\n".join(m["content"] for m in model.calls[0]["messages"])
-    assert '<doc id="E1" source="travel.txt"' in prompt
-    assert '<doc id="E2" source="travel.txt"' in prompt
+    assert '<doc source="travel.txt" location="txt" id="1">' in prompt
+    assert '<doc source="travel.txt" location="txt" id="2">' in prompt
     assert "What is the meal allowance?" in prompt
 
 
 def test_result_keeps_original_keys_and_adds_citations():
-    result, _ = _run("The allowance is 45 dollars per day [E1].")
-    assert result["answer"] == "The allowance is 45 dollars per day [E1]."
+    result, _ = _run("The allowance is 45 dollars per day [1].")
+    assert result["answer"] == "The allowance is 45 dollars per day [1]."
     assert result["context"] == DOCS
-    assert [e.eid for e in result["evidence"]] == ["E1", "E2"]
-    assert result["citations"].valid_ids == ["E1"]
+    assert [e.eid for e in result["evidence"]] == ["1", "2"]
+    assert result["citations"].valid_ids == ["1"]
     assert result["citations"].ok
     assert result["llm"].is_mock
 
 
 def test_hallucinated_evidence_id_is_flagged():
-    result, _ = _run("The allowance is 45 dollars per day [E7].")
-    assert result["citations"].invalid_ids == ["E7"]
+    result, _ = _run("The allowance is 45 dollars per day [7].")
+    assert result["citations"].invalid_ids == ["7"]
     assert not result["citations"].ok
 
 
@@ -72,3 +72,9 @@ def test_backend_failure_propagates_as_llm_error():
     chain = r.build_rag_chain(FixedRetriever(docs=DOCS), chat_model=model)
     with pytest.raises(LLMUnavailableError):
         chain.invoke("q")
+
+
+def test_legacy_citation_style_is_normalized():
+    result, _ = _run("The allowance is 45 dollars per day [E1].")
+    assert result["answer"] == "The allowance is 45 dollars per day [1]."
+    assert result["citations_normalized"] == 1 and result["citations"].valid_ids == ["1"]

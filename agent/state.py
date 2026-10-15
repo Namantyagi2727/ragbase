@@ -106,7 +106,7 @@ class AgentState(TypedDict, total=False):
     planner_fallback: Optional[str]         # why the planner's output was not used
 
     # retrieval
-    evidence: list[Evidence]                # numbered E1..En; numbering is stable across rounds
+    evidence: list[Evidence]                # numbered 1..n; numbering is stable across rounds
     pending_queries: list[dict[str, Any]]   # [{query, sources}] for the next retrieval round
 
     # synthesis / verification
@@ -127,6 +127,7 @@ class AgentState(TypedDict, total=False):
     retrieval_calls: Annotated[int, operator.add]
     prompt_tokens: Annotated[int, operator.add]
     completion_tokens: Annotated[int, operator.add]
+    llm_meta: Annotated[list[dict[str, Any]], operator.add]   # per successful call
 
 
 @dataclass
@@ -148,6 +149,22 @@ class AgentResult:
     completion_tokens: int
     elapsed_s: float
     error: Optional[str] = None
+    llm_meta: list[dict[str, Any]] = field(default_factory=list)
+
+    def inference_summary(self) -> dict[str, Any]:
+        """Backends, providers and gateway figures — only those actually reported."""
+        summary: dict[str, Any] = {
+            "backends": sorted({m["backend"] for m in self.llm_meta}),
+            "inference_modes": sorted({m["inference_mode"] for m in self.llm_meta if m.get("inference_mode")}),
+            "providers": sorted({m["provider_used"] for m in self.llm_meta if m.get("provider_used")}),
+        }
+        costs = [m["cost_usd"] for m in self.llm_meta if "cost_usd" in m]
+        if costs:
+            summary["cost_usd"] = round(sum(costs), 6)
+        fallbacks = [m["fallback_triggered"] for m in self.llm_meta if "fallback_triggered" in m]
+        if fallbacks:
+            summary["fallbacks"] = sum(bool(f) for f in fallbacks)
+        return summary
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -171,4 +188,6 @@ class AgentResult:
             "completion_tokens": self.completion_tokens,
             "elapsed_s": round(self.elapsed_s, 3),
             "error": self.error,
+            "inference": self.inference_summary(),
+            "llm_calls_detail": self.llm_meta,
         }

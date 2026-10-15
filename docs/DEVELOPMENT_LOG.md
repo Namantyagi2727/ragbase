@@ -9,8 +9,8 @@ test results and known limitations.
 |---|---|---|
 | 0 | Repository audit and implementation plan | Done |
 | 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
-| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — in review ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
-| 2 | Optional Prism gateway integration | Not started |
+| 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — merged ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
+| 2 | Optional Prism gateway integration | Done; verified against a real local Prism — in review ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
 | 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Not started |
 | 4 | Streamlit integration and public demo | Not started |
 | 5 | Documentation and final review | Not started |
@@ -304,6 +304,117 @@ All 186 pass locally; CI runs lint and the unit suite on every pull request.
 - **Cost of agentic mode:** 2 model calls on the simple route, typically 3–5
   on the complex route (at most 8 with one revision and every structured-output
   repair attempt used), versus 1 for Standard RAG.
+
+## Phase 2 — Prism gateway integration
+
+Full details: [docs/PRISM.md](PRISM.md). Prism itself was not modified.
+
+### Implementation
+
+- `llm/openai_compat.py`: `PrismChatModel`, selected with
+  `RAGBASE_LLM_BACKEND=prism`. Direct Ollama stays the default; there is no
+  fallback between backends. Temperature is always sent; structured output
+  uses explicit JSON instructions (Prism drops schema fields) with the
+  existing validation and one repair attempt; the API key is read from the
+  environment and redacted from errors and `repr`.
+- **Provider verification, fail closed:** a response is accepted only if
+  `prism_metadata.provider_used` is in `PRISM_ALLOWED_PROVIDERS` (default
+  `ollama`). Other providers (including Prism's mocks), cache hits (origin not
+  recorded by Prism) and missing metadata raise `ProviderRejectedError` and
+  the text is discarded. Mock content/ID detection is a second check.
+- Typed errors for guardrail blocks (with reason), auth, rate limit, missing
+  route, provider failure, timeout and connection failure.
+- Agent results record per-call backend, inference mode
+  (`local_direct` / `prism_local` / `prism_remote`) and only the gateway
+  fields actually reported (provider, fallback, cost, latency, tokens).
+- The factory keeps the Ollama model name and the Prism virtual model
+  separate, so an Ollama name is never sent to Prism.
+
+### Findings
+
+- **Guardrails block every evidence prompt.** RAGBase's evidence IDs (`E1`,
+  `E2`, …) match Presidio's `US_DRIVER_LICENSE` recognizer at score 0.3, and
+  Prism blocks on any match: 100% of standard-RAG prompts were blocked on the
+  travel-policy fixtures, the driver's manual and the novel corpus. With the
+  IDs rewritten to `E-1` style (measurement only), documents without personal
+  data pass (travel policies 0/6 blocked), but documents mentioning people are
+  still blocked (driver's manual 3/6, novels 29/30). Measured with Prism's
+  own `scan_prompt` run in-process.
+- **Context length.** Prism's upstream request carries no context option;
+  Ollama's default was 4096 tokens on the test machine, the same as RAGBase's
+  direct setting. Planted-fact probes behaved identically on both paths up
+  to ~4,000 tokens; beyond the context size both truncate silently to
+  ~2,050 tokens. RAGBase's default prompts are around 2,000 tokens at most.
+- **Cache hits are always rejected** under the fail-closed rule, so repeating
+  an identical request within Prism's one-hour cache window fails.
+
+### Completion patch: real-gateway verification
+
+**Citation format.** Evidence citations changed from `[E1]` to `[1]`, with the
+id attribute last in each evidence tag. `E1` matched Presidio's
+`US_DRIVER_LICENSE` recognizer; `E-1`, `doc1`, `EV1` and others were tagged
+`PERSON` by spaCy in some contexts; `#1` scanned clean but cited worse with
+`llama3.2` (coverage ~0.5). Numbered citations scanned clean across IDs 1–60
+and every prompt pattern, and cited at least as well as before (standard RAG
+coverage 0.86–0.87 vs 0.82–0.83, citation checks 20/20 both). Older styles in
+model output are normalized. With numeric IDs the verifier left
+`evidence_ids` empty, so verdicts now require them; agent outcomes then
+matched the old format. Chunk IDs and indexes are unchanged.
+
+**Structured output.** Against the real gateway every structured call was
+blocked: spaCy tagged "JSON", "Respond" and raw JSON-schema text as `PERSON`.
+The adapter now sends a plain-language field list; validation is unchanged.
+This was missed by the earlier in-process scan, which ran on prompts before the
+adapter's instruction was added — the measurement script now scans prompts
+exactly as sent.
+
+**Real stack.** Prism's app, Postgres, Redis and Jaeger ran in Docker with a
+compose override (outside the Prism repo) pointing the app at Ollama on the
+host; a test team and key were created through Prism's admin API, with the key
+stored only in RAGBase's gitignored `.env`. Verified over HTTP:
+
+| Check | Result |
+|---|---|
+| Ollama response through Prism, attributed (`provider_used=ollama`, `prism_local`, tokens, cost 0, gateway latency) | pass |
+| Standard RAG with valid citations (3 questions in the demo + 1 test) | pass |
+| Agentic multi-document questions (1 test + 2 demo questions; complex route, both policies retrieved, citations valid) | pass; demo answers ended `qualified` (model contradictions) |
+| Identical repeated request → cache hit without provenance → rejected | pass |
+| Prism `mock-fast` route (mock `openai`) → rejected | pass |
+| Synthetic names → guardrail block (PERSON) | pass |
+| Policy text without PII passes guardrails | pass |
+
+**Latency** (3 Standard RAG questions, matched answer lengths): LLM call
+0.51–1.06 s via Prism vs ~0.31 s direct; Prism-reported gateway latency
+426–978 ms. Median end to end 0.99 s vs 0.35 s.
+
+**Other findings.** Random letter-digit tokens in a question (hex IDs, SKUs)
+can be blocked as `US_DRIVER_LICENSE`. Prompted JSON was valid on first
+attempt in 15/16 calls vs 16/16 with native schema; one live verifier output
+failed both attempts and was recorded as `not_verified`.
+
+### Tests
+
+| Suite | Count |
+|---|---|
+| Unit (incl. Prism adapter, mocked-Prism end-to-end, citation-format regressions) | 239 |
+| Integration (real embeddings + reranker) | 4 |
+| Live (local Ollama) | 6 |
+| Live Prism (real gateway) | 7 — all passed against the real gateway; on re-runs the two fixed-prompt tests skip because Prism answers them from cache |
+
+### Remaining limitations
+
+- Documents mentioning people (and other detected PII or injection-like text)
+  are blocked through Prism by design.
+- Identical repeated requests within Prism's one-hour cache window are rejected.
+- Context length through Prism depends on the Ollama server default.
+- Prompted structured output is slightly less reliable than native decoding.
+- Prism keeps full responses (document-derived) in Redis for an hour.
+
+### Possible later Prism changes (not made)
+
+Record the originating provider on cache entries; a per-key guardrail policy
+for document-grounded clients; a context-length pass-through; native
+structured output.
 
 ## Carried forward to later phases
 

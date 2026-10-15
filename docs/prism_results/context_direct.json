@@ -1,0 +1,122 @@
+[
+ {
+  "target": "ollama-native",
+  "passages": 2,
+  "repeat": 1,
+  "prompt_tokens": 269,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 1.81,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 2,
+  "repeat": 2,
+  "prompt_tokens": 269,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.42,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 6,
+  "repeat": 1,
+  "prompt_tokens": 617,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.9,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 6,
+  "repeat": 2,
+  "prompt_tokens": 617,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.44,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 12,
+  "repeat": 1,
+  "prompt_tokens": 1139,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 1.28,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 12,
+  "repeat": 2,
+  "prompt_tokens": 1139,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.5,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 20,
+  "repeat": 1,
+  "prompt_tokens": 1835,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 1.5,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 20,
+  "repeat": 2,
+  "prompt_tokens": 1835,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 0.52,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 30,
+  "repeat": 1,
+  "prompt_tokens": 2705,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 1.78,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 30,
+  "repeat": 2,
+  "prompt_tokens": 2705,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.52,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 45,
+  "repeat": 1,
+  "prompt_tokens": 4010,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 2.67,
+  "error": null
+ },
+ {
+  "target": "ollama-native",
+  "passages": 45,
+  "repeat": 2,
+  "prompt_tokens": 4010,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 0.59,
+  "error": null
+ }
+]

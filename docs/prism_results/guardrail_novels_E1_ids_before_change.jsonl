@@ -1,0 +1,59 @@
+{"case": "benign_trigger_words.txt", "role": "standard", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "benign_trigger_words.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "benign_trigger_words.txt", "role": "synthesis", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "benign_trigger_words.txt", "role": "verifier", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "contact_details.txt", "role": "standard", "blocked": true, "reason": "PII detected: EMAIL_ADDRESS, PHONE_NUMBER, US_DRIVER_LICENSE"}
+{"case": "contact_details.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "contact_details.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: EMAIL_ADDRESS, PHONE_NUMBER, US_DRIVER_LICENSE"}
+{"case": "contact_details.txt", "role": "verifier", "blocked": true, "reason": "PII detected: EMAIL_ADDRESS, PHONE_NUMBER, US_DRIVER_LICENSE"}
+{"case": "identifiers.txt", "role": "standard", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "identifiers.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "identifiers.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "identifiers.txt", "role": "verifier", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "injection_like.txt", "role": "standard", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "injection_like.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "injection_like.txt", "role": "synthesis", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "injection_like.txt", "role": "verifier", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "named_approvers.txt", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "named_approvers.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "named_approvers.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "named_approvers.txt", "role": "verifier", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "network_config.txt", "role": "standard", "blocked": true, "reason": "PII detected: IP_ADDRESS, US_DRIVER_LICENSE"}
+{"case": "network_config.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "network_config.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: IP_ADDRESS, US_DRIVER_LICENSE"}
+{"case": "network_config.txt", "role": "verifier", "blocked": true, "reason": "PII detected: IP_ADDRESS, US_DRIVER_LICENSE"}
+{"case": "plain_policy.txt", "role": "standard", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "plain_policy.txt", "role": "planner", "blocked": false, "reason": null}
+{"case": "plain_policy.txt", "role": "synthesis", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "plain_policy.txt", "role": "verifier", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "(no documents)", "role": "planner", "blocked": false, "reason": null}
+{"case": "index:Who is Elizabeth Bennet and how does she feel about Mr. Darc", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe the creature that Victor Frankenstein creates.", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What advice does the White Rabbit give Alice?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe Captain Ahab's obsession with the white whale.", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What deductions does Sherlock Holmes make about his visitor?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:How does Dr. Jekyll transform into Mr. Hyde?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What is the significance of Dorian Gray's portrait?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe Huckleberry Finn's journey down the river.", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What happens to Jonathan Harker at Dracula's castle?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:How does Emma Woodhouse react to Mr. Knightley?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What happens to Gregor Samsa at the start of Metamorphosis?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe the effect of the yellow wallpaper on the narrator.", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What historical events open A Tale of Two Cities?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What does the Modest Proposal suggest about the poor in Irel", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What does Long John Silver want on the ship?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:How is Prince Andrei wounded at Austerlitz?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What is Ulysses' relationship to Leopold Bloom?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe the relationship between Mr. Rochester and Jane.", "role": "standard", "blocked": true, "reason": "Potential prompt injection detected"}
+{"case": "index:What does Ishmael think of the Pequod's crew?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:How does the narrator describe the storm at sea?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What is the moral lesson at the end of the story?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe the setting of the opening chapter.", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What conflict arises between the two main characters?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:How is the villain finally defeated?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What does the letter reveal about the family's secret?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe the protagonist's inner thoughts before the confron", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:What role does fate play in the story's tragic ending?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:How does the author describe the countryside in autumn?", "role": "standard", "blocked": true, "reason": "PII detected: US_DRIVER_LICENSE"}
+{"case": "index:What does the doctor conclude about the patient's condition?", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}
+{"case": "index:Describe the ball scene and who attends it.", "role": "standard", "blocked": true, "reason": "PII detected: PERSON, US_DRIVER_LICENSE"}

@@ -1,0 +1,122 @@
+[
+ {
+  "target": "ollama-openai",
+  "passages": 2,
+  "repeat": 1,
+  "prompt_tokens": 269,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.65,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 2,
+  "repeat": 2,
+  "prompt_tokens": 269,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.44,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 6,
+  "repeat": 1,
+  "prompt_tokens": 617,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.95,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 6,
+  "repeat": 2,
+  "prompt_tokens": 617,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.46,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 12,
+  "repeat": 1,
+  "prompt_tokens": 1139,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 1.15,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 12,
+  "repeat": 2,
+  "prompt_tokens": 1139,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.47,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 20,
+  "repeat": 1,
+  "prompt_tokens": 1835,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 1.52,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 20,
+  "repeat": 2,
+  "prompt_tokens": 1835,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 0.53,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 30,
+  "repeat": 1,
+  "prompt_tokens": 2705,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 1.73,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 30,
+  "repeat": 2,
+  "prompt_tokens": 2705,
+  "start_fact_found": true,
+  "end_fact_found": true,
+  "latency_s": 0.52,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 45,
+  "repeat": 1,
+  "prompt_tokens": 4010,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 2.52,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 45,
+  "repeat": 2,
+  "prompt_tokens": 4010,
+  "start_fact_found": true,
+  "end_fact_found": false,
+  "latency_s": 0.57,
+  "error": null
+ }
+]

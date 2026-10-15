@@ -22,6 +22,7 @@ def _print_result(result) -> None:
     print(f"\nRoute: {result.route}   Status: {result.status}   "
           f"LLM calls: {result.llm_calls}   Searches: {result.retrieval_calls}   "
           f"Revisions: {result.revision_count}   Time: {result.elapsed_s:.1f}s")
+    print(f"Inference: {result.inference_summary()}")
     print("\nTrace:")
     for e in result.trace:
         print(f"  {e['step']:>2}. [{e['node']}] {e['summary']}  ({e['elapsed_s']:.1f}s)")
@@ -46,7 +47,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m agent", description=__doc__.strip().splitlines()[0])
     ap.add_argument("question")
     ap.add_argument("--index-dir", default=config.INDEX_DIR)
-    ap.add_argument("--model", default=config.OLLAMA_MODEL)
+    ap.add_argument("--backend", default=config.LLM_BACKEND, choices=["ollama", "prism"],
+                    help="ollama = direct local; prism = through the Prism gateway (no fallback)")
+    ap.add_argument("--model", default=config.OLLAMA_MODEL, help="Ollama model (direct backend)")
+    ap.add_argument("--prism-model", default=config.PRISM_MODEL, help="Prism virtual model")
     ap.add_argument("--verifier-model", default=config.AGENT_VERIFIER_MODEL or None)
     ap.add_argument("--max-revisions", type=int, default=config.AGENT_MAX_REVISIONS)
     ap.add_argument("--no-rerank", action="store_true")
@@ -58,8 +62,11 @@ def main(argv: list[str] | None = None) -> int:
     result = run_agent(
         args.question,
         retriever,
-        get_chat_model(model=args.model),
-        verifier_model=get_chat_model(model=args.verifier_model) if args.verifier_model else None,
+        get_chat_model(backend=args.backend, model=args.model, prism_model=args.prism_model),
+        verifier_model=(
+            get_chat_model(backend=args.backend, model=args.verifier_model, prism_model=args.verifier_model)
+            if args.verifier_model else None
+        ),
         settings=AgentSettings(max_revisions=args.max_revisions),
     )
     if args.json:

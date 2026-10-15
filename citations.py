@@ -3,15 +3,24 @@ citations.py — Evidence IDs and deterministic citation validation.
 
 Shared by Standard RAG and Agentic RAG:
 
-  1. Retrieved chunks become numbered evidence items (E1, E2, ...), each
+  1. Retrieved chunks become numbered evidence items (1, 2, ...), each
      bound to a real chunk_id, source file and location.
-  2. The model is shown the evidence block and must cite only [E#] IDs.
+  2. The model is shown the evidence block and must cite only those numbers,
+     in square brackets: [1], [2, 3].
   3. `validate_citations()` checks the answer without any model call:
      cited IDs must exist in the evidence that was actually provided;
      free-form citations like "[file.pdf @ p.3]" are flagged because the
      model could have invented them.
 
 Citation identifiers therefore always originate from retrieval metadata.
+
+Format note: citations are plain numbers, [1]. An earlier "E1" format matched
+Presidio's US_DRIVER_LICENSE recognizer, so gateways that scan prompts for PII
+(Prism) blocked every evidence prompt; "E-1", "#1" and other formats were
+tagged as PERSON by spaCy in some contexts or lowered citation quality with a
+small local model. Numbered citations, with the ID placed last in each
+evidence tag, scanned clean and cited best. Model output in the older styles
+([E1], [E-1], [#1]) is normalized to [1].
 """
 
 from __future__ import annotations
@@ -39,21 +48,26 @@ _ABSENCE_PATTERNS = _ABSTAIN_PATTERNS + [
     re.compile(r"\bno (?:information|mention|details?)\b", re.I),
 ]
 
-CITE_RE = re.compile(r"\[\s*(E\d+(?:\s*[,;]\s*E\d+)*)\s*\]")
-_ID_RE = re.compile(r"E\d+")
+CITE_RE = re.compile(r"\[\s*(\d{1,3}(?:\s*[,;]\s*\d{1,3})*)\s*\]")
+_ID_RE = re.compile(r"\d{1,3}")
+# Older / variant spellings a model may still produce: [E1], [E-1], [E 1], [#1].
+_LEGACY_CITE_RE = re.compile(
+    r"\[\s*((?:E[-\s]?|#)\d+(?:\s*[,;]\s*(?:E[-\s]?|#)?\d+)*)\s*\]"
+)
+_LEGACY_ID_RE = re.compile(r"(?:E[-\s]?|#)?(\d+)")
 # Bracketed references that look like sources but are not evidence IDs,
 # e.g. "[handbook.pdf @ p.2]" or "[Source: travel.txt]".
-_NON_EVIDENCE_RE = re.compile(r"\[(?!\s*E\d)[^\[\]\n]*(?:@|\.pdf|\.docx|\.txt|\.csv|\.xlsx|source)[^\[\]\n]*\]", re.I)
+_NON_EVIDENCE_RE = re.compile(r"\[(?!\s*\d)[^\[\]\n]*(?:@|\.pdf|\.docx|\.txt|\.csv|\.xlsx|source)[^\[\]\n]*\]", re.I)
 # Move citations that follow sentence punctuation onto the sentence they cite:
-# "45 dollars. [E1]" -> "45 dollars [E1]."
-_TRAILING_CITE_RE = re.compile(r"([.!?])\s*((?:\[\s*E\d+(?:\s*[,;]\s*E\d+)*\s*\]\s*)+)")
+# "45 dollars. [1]" -> "45 dollars [1]."
+_TRAILING_CITE_RE = re.compile(r"([.!?])\s*((?:\[\s*\d{1,3}(?:\s*[,;]\s*\d{1,3})*\s*\]\s*)+)")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 _SKIP_LINE_RE = re.compile(r"^\s*(?:#+\s*|\*\*)?\s*(?:sources?|references?|citations?)\s*:?\**\s*", re.I)
 
 
 @dataclass(frozen=True)
 class Evidence:
-    eid: str          # "E1"
+    eid: str          # "1"
     chunk_id: str
     source: str
     loc: str
@@ -81,7 +95,7 @@ def build_evidence(docs: Iterable[Document], start: int = 1) -> list[Evidence]:
             continue
         seen.add(cid)
         evidence.append(Evidence(
-            eid=f"E{start + len(evidence)}",
+            eid=str(start + len(evidence)),
             chunk_id=cid,
             source=str(doc.metadata.get("source", "unknown")),
             loc=str(doc.metadata.get("loc", "")),
@@ -98,16 +112,37 @@ def format_evidence(evidence: list[Evidence]) -> str:
     """Render evidence for a prompt, one tagged block per item.
 
     Tag-style delimiters worked markedly better with small local models than
-    a "[E1] source: ..." header, which they tended to copy verbatim instead
-    of answering. Document text cannot close its own tag early.
+    a "[ID] source: ..." header, which they tended to copy verbatim instead
+    of answering. The ID comes last in the tag: `<doc id="#29"` was tagged as
+    a PERSON by spaCy-based PII scanners. Document text cannot close its own
+    tag early.
     """
     if not evidence:
         return "(no evidence retrieved)"
     return "\n\n".join(
-        f'<doc id="{e.eid}" source="{_attr(e.source)}" location="{_attr(e.loc or "n/a")}">\n'
+        f'<doc source="{_attr(e.source)}" location="{_attr(e.loc or "n/a")}" id="{e.eid}">\n'
         f"{re.sub(r'</?doc', '[doc', e.text.strip(), flags=re.I)}\n</doc>"
         for e in evidence
     )
+
+
+def normalize_evidence_id(raw: str) -> str:
+    """Map "E1", "E-1", "e1", "#1", "[1]" or "1" to the canonical "1"; other strings unchanged."""
+    m = re.fullmatch(r"\s*\[?\s*(?:[Ee][-\s]?|#)?(\d+)\s*\]?\s*", str(raw))
+    return str(int(m.group(1))) if m else str(raw)
+
+
+def normalize_citations(text: str) -> tuple[str, int]:
+    """Rewrite citation markers in older styles ([E1], [E-1], [#1]) to [1]. Returns (text, count)."""
+    count = 0
+
+    def fix(m: re.Match) -> str:
+        nonlocal count
+        count += 1
+        ids = [str(int(n)) for n in _LEGACY_ID_RE.findall(m.group(1))]
+        return "[" + ", ".join(ids) + "]"
+
+    return _LEGACY_CITE_RE.sub(fix, text), count
 
 
 def extract_citations(text: str) -> list[str]:

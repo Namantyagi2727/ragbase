@@ -37,12 +37,25 @@ def _env_bool(name: str, default: bool) -> bool:
 # Embedding model (Hugging Face sentence-transformers)
 EMBED_MODEL: str = _env_str("RAGBASE_EMBED_MODEL", "all-MiniLM-L6-v2")
 
-# LLM backend [RAGBASE_LLM_BACKEND]: "ollama" (fully local) is the only
-# production backend in this release; "fake" is used by tests.
+# LLM backend [RAGBASE_LLM_BACKEND]: "ollama" (direct, fully local, default) or
+# "prism" (through the Prism gateway). There is no automatic fallback between them.
 LLM_BACKEND: str = _env_str("RAGBASE_LLM_BACKEND", "ollama")
 LLM_TIMEOUT_S: float = _env_float("RAGBASE_LLM_TIMEOUT_S", 120.0)
 LLM_TEMPERATURE: float = 0.1
 LLM_NUM_CTX: int = 4096
+
+# Prism gateway (RAGBASE_LLM_BACKEND=prism). Credentials come only from the
+# environment; nothing here is a secret.
+PRISM_BASE_URL: str = _env_str("PRISM_BASE_URL", "http://localhost:8000")
+PRISM_MODEL: str = _env_str("PRISM_MODEL", "fast")            # Prism virtual model
+PRISM_TIMEOUT_S: float = _env_float("PRISM_TIMEOUT_S", 120.0)
+# Providers whose responses are accepted. Anything else — including Prism's mock
+# providers and responses that do not identify their provider — is rejected.
+PRISM_ALLOWED_PROVIDERS: frozenset = frozenset(
+    p.strip() for p in _env_str("PRISM_ALLOWED_PROVIDERS", "ollama").split(",") if p.strip()
+)
+# Providers that run on the local machine (used to label inference mode).
+LOCAL_PROVIDERS: frozenset = frozenset({"ollama"})
 
 # Ollama LLM settings
 OLLAMA_MODEL: str = _env_str("OLLAMA_MODEL", "llama3.2")

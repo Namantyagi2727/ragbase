@@ -12,10 +12,10 @@ from tests.unit.agent_helpers import MemoryRetriever, RoleModel
 
 COMPLEX = {"route": "complex", "subqueries": [{"query": "2023 meal allowance"}, {"query": "2024 meal allowance"}]}
 SIMPLE = {"route": "simple"}
-TWO_FACTS = "In 2023 the meal allowance was 45 dollars [E1]. In 2024 it rose to 60 dollars [E2]."
+TWO_FACTS = "In 2023 the meal allowance was 45 dollars [1]. In 2024 it rose to 60 dollars [2]."
 
 
-def verdict(n, status="supported", ids=("E1",)):
+def verdict(n, status="supported", ids=("1",)):
     return {"claim_number": n, "status": status, "evidence_ids": list(ids)}
 
 
@@ -33,26 +33,26 @@ def test_one_verdict_for_two_claims_is_not_verification():
     result, _ = _run(model)
     v = result.verification
     assert v.grounding == "incomplete" and (v.claims_verified, v.claims_checked) == (1, 2)
-    assert v.unverified_claims == ["In 2024 it rose to 60 dollars [E2]."]
+    assert v.unverified_claims == ["In 2024 it rose to 60 dollars [2]."]
     assert result.status == "completed_unverified"
 
 
 def test_duplicate_verdicts_leave_the_claim_unresolved():
-    dup = {"verdicts": [verdict(1), verdict(1, "unsupported"), verdict(2, ids=["E2"])], "recommendation": "accept"}
+    dup = {"verdicts": [verdict(1), verdict(1, "unsupported"), verdict(2, ids=["2"])], "recommendation": "accept"}
     result, _ = _run(RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[dup]))
     assert result.verification.grounding == "incomplete"
     assert any("2 verdicts for claim 1" in i for i in result.verification.issues)
 
 
 def test_verdict_with_unknown_evidence_does_not_count():
-    bad = {"verdicts": [verdict(1), verdict(2, ids=["E9"])], "recommendation": "accept"}
+    bad = {"verdicts": [verdict(1), verdict(2, ids=["9"])], "recommendation": "accept"}
     result, _ = _run(RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[bad]))
     assert result.verification.grounding == "incomplete" and result.verification.claims_verified == 1
 
 
 def test_supported_verdict_must_rely_on_the_claims_own_citation():
-    # Claim 2 cites E2, but the verifier says E1 supports it.
-    crossed = {"verdicts": [verdict(1), verdict(2, ids=["E1"])], "recommendation": "accept"}
+    # Claim 2 cites 2, but the verifier says 1 supports it.
+    crossed = {"verdicts": [verdict(1), verdict(2, ids=["1"])], "recommendation": "accept"}
     result, _ = _run(RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[crossed]))
     v = result.verification
     assert v.grounding == "incomplete"
@@ -60,16 +60,16 @@ def test_supported_verdict_must_rely_on_the_claims_own_citation():
 
 
 def test_full_attributable_coverage_is_verified():
-    ok = {"verdicts": [verdict(1), verdict(2, ids=["E2"])], "recommendation": "accept"}
+    ok = {"verdicts": [verdict(1), verdict(2, ids=["2"])], "recommendation": "accept"}
     result, _ = _run(RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[ok]))
     assert result.verification.grounding == "verified" and result.verification.coverage == 1.0
     assert result.status == "completed"
 
 
 def test_uncited_substantive_claim_gets_one_revision_then_stays_incomplete():
-    uncited = "In 2023 the meal allowance was 45 dollars [E1]. In 2024 the allowance rose to sixty dollars."
+    uncited = "In 2023 the meal allowance was 45 dollars [1]. In 2024 the allowance rose to sixty dollars."
     model = RoleModel(planner=[COMPLEX], synth=[uncited],
-                      verifier=[{"verdicts": [verdict(1), verdict(2, ids=["E2"])], "recommendation": "accept"}])
+                      verifier=[{"verdicts": [verdict(1), verdict(2, ids=["2"])], "recommendation": "accept"}])
     result, _ = _run(model, max_revisions=1)
     assert model.calls.count("synth") == 2           # exactly one bounded revision
     assert result.verification.grounding == "incomplete"
@@ -96,11 +96,11 @@ DMV = {
 }
 DMV_Q = "What is the blood alcohol limit for drivers under 21, and what are the penalties?"
 DMV_PLAN = {"route": "complex", "subqueries": [{"query": "penalties driver under 21 alcohol violation"}]}
-FIRST = ("Drivers under 21 convicted of an alcohol related violation face a minimum one year revocation [E1]. "
+FIRST = ("Drivers under 21 convicted of an alcohol related violation face a minimum one year revocation [1]. "
          "The evidence does not specify a blood alcohol limit for drivers under 21.")
-FIXED = ("Drivers under 21 convicted of an alcohol related violation face a minimum one year revocation [E1]. "
+FIXED = ("Drivers under 21 convicted of an alcohol related violation face a minimum one year revocation [1]. "
          "Under the Zero Tolerance Law, a driver under 21 with a blood alcohol content from .02 to .07 "
-         "has their license suspended for six months [E2].")
+         "has their license suspended for six months [2].")
 
 
 def test_driver_manual_regression_absence_claim_triggers_targeted_search():
@@ -108,7 +108,7 @@ def test_driver_manual_regression_absence_claim_triggers_targeted_search():
     model = RoleModel(
         planner=[DMV_PLAN], synth=[FIRST, FIXED],
         verifier=[{"verdicts": [verdict(1)], "recommendation": "accept"},
-                  {"verdicts": [verdict(1), verdict(2, ids=["E2"])], "recommendation": "accept"}],
+                  {"verdicts": [verdict(1), verdict(2, ids=["2"])], "recommendation": "accept"}],
     )
     result, retriever = _run(model, DMV_Q, retriever=MemoryRetriever(DMV))
     assert retriever.queries[-1][0].startswith("The evidence does not specify a blood alcohol limit")
@@ -142,8 +142,8 @@ def test_absence_claim_without_revision_budget_is_reported_as_unsearched():
 def test_abstention_with_answering_evidence_is_challenged_and_revised():
     model = RoleModel(
         planner=[COMPLEX], synth=[ABSTAIN_TEXT, TWO_FACTS],
-        abscheck=[{"answerable": "yes", "evidence_ids": ["E1", "E2"]}],
-        verifier=[{"verdicts": [verdict(1), verdict(2, ids=["E2"])], "recommendation": "accept"}],
+        abscheck=[{"answerable": "yes", "evidence_ids": ["1", "2"]}],
+        verifier=[{"verdicts": [verdict(1), verdict(2, ids=["2"])], "recommendation": "accept"}],
     )
     result, _ = _run(model)
     assert model.calls == ["planner", "synth", "abscheck", "synth", "verifier"]
@@ -152,7 +152,7 @@ def test_abstention_with_answering_evidence_is_challenged_and_revised():
 
 def test_challenged_abstention_without_revision_budget_is_qualified():
     model = RoleModel(planner=[COMPLEX], synth=[ABSTAIN_TEXT],
-                      abscheck=[{"answerable": "partially", "evidence_ids": ["E2"]}])
+                      abscheck=[{"answerable": "partially", "evidence_ids": ["2"]}])
     result, _ = _run(model, max_revisions=0)
     assert result.verification.abstention_check == "evidence_may_answer"
     assert result.status == "qualified" and "may contain an answer" in result.answer
@@ -164,7 +164,7 @@ def test_abstention_confirmed_by_check():
     assert result.verification.abstention_check == "confirmed" and result.status == "completed"
 
 
-@pytest.mark.parametrize("reply", ["not json", {"answerable": "yes", "evidence_ids": ["E42"]}])
+@pytest.mark.parametrize("reply", ["not json", {"answerable": "yes", "evidence_ids": ["42"]}])
 def test_failed_or_unsupported_abstention_check_is_not_a_confirmation(reply):
     model = RoleModel(planner=[COMPLEX], synth=[ABSTAIN_TEXT], abscheck=[reply])
     result, _ = _run(model)
@@ -187,12 +187,12 @@ def test_abstention_with_no_evidence_is_labelled_no_evidence():
 
 
 @pytest.mark.parametrize("extra", [
-    verdict(1, ids=["E9"]),   # unknown evidence ID
+    verdict(1, ids=["9"]),   # unknown evidence ID
     verdict(7),               # nonexistent claim number
 ])
 def test_extra_invalid_verdict_prevents_full_verification(extra):
     """Every claim is validly covered, but one additional verdict is malformed."""
-    output = {"verdicts": [verdict(1), verdict(2, ids=["E2"]), extra], "recommendation": "accept"}
+    output = {"verdicts": [verdict(1), verdict(2, ids=["2"]), extra], "recommendation": "accept"}
     result, _ = _run(RoleModel(planner=[COMPLEX], synth=[TWO_FACTS], verifier=[output]))
     v = result.verification
     assert (v.claims_verified, v.claims_checked) == (2, 2)

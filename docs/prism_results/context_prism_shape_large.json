@@ -1,0 +1,32 @@
+[
+ {
+  "target": "ollama-openai",
+  "passages": 60,
+  "repeat": 1,
+  "prompt_tokens": 2050,
+  "start_fact_found": false,
+  "end_fact_found": false,
+  "latency_s": 0.77,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 90,
+  "repeat": 1,
+  "prompt_tokens": 2050,
+  "start_fact_found": false,
+  "end_fact_found": false,
+  "latency_s": 0.7,
+  "error": null
+ },
+ {
+  "target": "ollama-openai",
+  "passages": 140,
+  "repeat": 1,
+  "prompt_tokens": 2050,
+  "start_fact_found": false,
+  "end_fact_found": false,
+  "latency_s": 0.7,
+  "error": null
+ }
+]

@@ -1,0 +1,209 @@
+{
+ "timestamp": "2026-10-13T23:46:43+00:00",
+ "machine": "arm64 Darwin 27.0.0",
+ "prism_model": "fast",
+ "ollama_model": "llama3.2",
+ "standard": [
+  {
+   "question": "How long do I have to submit an expense report under the 2024 policy?",
+   "prism": {
+    "ok": true,
+    "end_to_end_s": 1.76,
+    "citations_ok": true,
+    "cited": [
+     "2"
+    ],
+    "answer": "You have to submit an expense report within 15 days of the end of the trip, as stated in the 2024 policy [2].",
+    "backend": "prism",
+    "provider_used": "ollama",
+    "inference_mode": "prism_local",
+    "cache_hit": false,
+    "fallback_triggered": false,
+    "cost_usd": 0.0,
+    "gateway_latency_ms": 978,
+    "client_latency_s": 1.057,
+    "prompt_tokens": 668,
+    "completion_tokens": 30
+   },
+   "direct": {
+    "ok": true,
+    "end_to_end_s": 0.352,
+    "citations_ok": true,
+    "cited": [
+     "2"
+    ],
+    "answer": "You have to submit an expense report within 15 days of the end of the trip under the 2024 policy [2].",
+    "backend": "ollama",
+    "inference_mode": "local_direct",
+    "client_latency_s": 0.315,
+    "prompt_tokens": 668,
+    "completion_tokens": 27
+   }
+  },
+  {
+   "question": "Above what nightly rate does a hotel stay need director approval in 2024?",
+   "prism": {
+    "ok": true,
+    "end_to_end_s": 0.62,
+    "citations_ok": true,
+    "cited": [
+     "1"
+    ],
+    "answer": "According to the 2024 travel policy, hotel stays above $250 per night require approval from a director, not a manager [1].",
+    "backend": "prism",
+    "provider_used": "ollama",
+    "inference_mode": "prism_local",
+    "cache_hit": false,
+    "fallback_triggered": false,
+    "cost_usd": 0.0,
+    "gateway_latency_ms": 426,
+    "client_latency_s": 0.508,
+    "prompt_tokens": 667,
+    "completion_tokens": 29
+   },
+   "direct": {
+    "ok": true,
+    "end_to_end_s": 0.377,
+    "citations_ok": true,
+    "cited": [
+     "1"
+    ],
+    "answer": "According to the 2024 travel policy, hotel stays above $250 per night require approval from a director, not a manager [1].",
+    "backend": "ollama",
+    "inference_mode": "local_direct",
+    "client_latency_s": 0.339,
+    "prompt_tokens": 667,
+    "completion_tokens": 29
+   }
+  },
+  {
+   "question": "How many days of annual leave can be carried into the next year?",
+   "prism": {
+    "ok": true,
+    "end_to_end_s": 0.994,
+    "citations_ok": true,
+    "cited": [
+     "1"
+    ],
+    "answer": "According to the employee handbook, up to 5 unused days of annual leave can be carried into the next year [1].",
+    "backend": "prism",
+    "provider_used": "ollama",
+    "inference_mode": "prism_local",
+    "cache_hit": false,
+    "fallback_triggered": false,
+    "cost_usd": 0.0,
+    "gateway_latency_ms": 802,
+    "client_latency_s": 0.882,
+    "prompt_tokens": 665,
+    "completion_tokens": 26
+   },
+   "direct": {
+    "ok": true,
+    "end_to_end_s": 0.342,
+    "citations_ok": true,
+    "cited": [
+     "1"
+    ],
+    "answer": "According to the employee handbook, up to 5 unused days of annual leave can be carried into the next year [1].",
+    "backend": "ollama",
+    "inference_mode": "local_direct",
+    "client_latency_s": 0.307,
+    "prompt_tokens": 665,
+    "completion_tokens": 26
+   }
+  }
+ ],
+ "agent": [
+  {
+   "question": "How did the expense report deadline change between the 2023 and 2024 travel policies?",
+   "status": "qualified",
+   "route": "complex",
+   "sources": [
+    "employee_handbook.txt",
+    "travel_policy_2023.txt",
+    "travel_policy_2024.txt"
+   ],
+   "citations_ok": true,
+   "grounding": "partially_verified",
+   "llm_calls": 5,
+   "elapsed_s": 10.17,
+   "inference": {
+    "backends": [
+     "prism"
+    ],
+    "inference_modes": [
+     "prism_local"
+    ],
+    "providers": [
+     "ollama"
+    ],
+    "cost_usd": 0.0,
+    "fallbacks": 0
+   },
+   "error": null,
+   "trace": [
+    "plan: Planned 3 search(es) across documents for comparison",
+    "retrieve: Ran 9 search(es); 5 new passage(s), 5 total",
+    "synthesize: Drafted answer citing 2 of 5 passage(s)",
+    "verify: Verification incomplete: 1 of 2 claim(s) verified",
+    "refine: Refinement round 1: revising with verifier feedback",
+    "synthesize: Revised answer citing 3 of 5 passage(s)",
+    "verify: Verification found problems (partially verified)",
+    "finalize: Finished: qualified"
+   ],
+   "answer": "According to the evidence, the expense report deadline changed between the 2023 and 2024 travel policies.\n\nIn the 2023 policy, expense reports must be submitted within 30 days of the end of the trip, with itemized receipts for any single expense above $25 [2]. However, in the 2024 policy, the deadline was reduced to 15 days, but the requirement for itemized receipts for expenses above $25 remains the same [5].\n\nThere is no mention of the deadline changing for the 2024 policy in the 2023 policy itself, but rather that this edition replaces the 2023 policy from March 1, 2024 [4].\n\n> \u26a0 Verification: 1 statement(s) could not be confirmed against the documents.\n\n> Note: statements that information is missing are based on the passages retrieved; they do not establish that the documents lack it."
+  },
+  {
+   "question": "Compare the business class rules in the 2023 and 2024 travel policies.",
+   "status": "qualified",
+   "route": "complex",
+   "sources": [
+    "employee_handbook.txt",
+    "travel_policy_2023.txt",
+    "travel_policy_2024.txt"
+   ],
+   "citations_ok": true,
+   "grounding": "partially_verified",
+   "llm_calls": 5,
+   "elapsed_s": 11.01,
+   "inference": {
+    "backends": [
+     "prism"
+    ],
+    "inference_modes": [
+     "prism_local"
+    ],
+    "providers": [
+     "ollama"
+    ],
+    "cost_usd": 0.0,
+    "fallbacks": 0
+   },
+   "error": null,
+   "trace": [
+    "plan: Planned 3 search(es) across documents for comparison",
+    "retrieve: Ran 9 search(es); 5 new passage(s), 5 total",
+    "synthesize: Drafted answer citing 2 of 5 passage(s)",
+    "verify: Claim verification failed; answer is not verified",
+    "refine: Refinement round 1: revising with verifier feedback",
+    "synthesize: Revised answer citing 2 of 5 passage(s)",
+    "verify: Verification found problems (partially verified)",
+    "finalize: Finished: qualified"
+   ],
+   "answer": "According to the evidence, the business class rules in the 2023 and 2024 travel policies differ.\n\nIn the 2023 policy, business class may be booked for flights of six hours or longer [2]. However, the 2024 policy states that business class may be booked for flights of eight hours or longer [4].\n\nThere is no information provided in the evidence about the business class rules in the 2023 policy being different from the 2024 policy. The 2023 policy does not mention a specific duration for business class flights, so it is unclear if the rules were the same in 2023 as they are in 2024.\n\nTo answer the question accurately, we would need more information about the business class rules in the 2023 policy.\n\n> \u26a0 Verification: 1 statement(s) could not be confirmed against the documents.\n\n> Note: statements that information is missing are based on the passages retrieved; they do not establish that the documents lack it."
+  }
+ ],
+ "checks": {
+  "repeat_request": "ProviderRejectedError: Prism served a cached response whose original provider is not recorded; rejected because the provider cannot be established",
+  "mock_route": "ProviderRejectedError: Prism response came from provider 'openai', which is not in PRISM_ALLOWED_PROVIDERS (ollama)",
+  "pii_document": "LLMGuardrailError: request blocked by gateway guardrail: PII detected: PERSON"
+ },
+ "latency_summary": {
+  "n": 3,
+  "prism_end_to_end_median_s": 0.994,
+  "direct_end_to_end_median_s": 0.352,
+  "prism_client_call_median_s": 0.882,
+  "direct_client_call_median_s": 0.315,
+  "note": "Answers differ in length between paths, so per-call times are not a pure overhead measure."
+ }
+}
