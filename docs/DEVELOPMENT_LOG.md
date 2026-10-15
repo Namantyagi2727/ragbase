@@ -499,6 +499,49 @@ indexed corpus (default chunking), not just in the extracted text.
   peak memory. Not yet run: a manually triggered workflow can only be
   dispatched once the file is on the default branch.
 
+### Initial official benchmark: surprising findings
+
+The first official run (commit `a83197f`, results kept local) completed with
+no errors. Its findings led to the corrective work below; the results remain
+the pre-fix baseline and were not overwritten.
+
+- **Comparison-mode bug in the agent.** For comparison questions the agent
+  searched `list_documents()[:max_compare_docs]`: the first five documents in
+  alphabetical order. With eight documents in the corpus the two travel
+  policies were never searched, so every comparison-mode answer failed and
+  most of the agent's false abstentions came from this. The Phase 1B tests
+  used three documents and never reached the cap. The abstention check
+  "confirmed" these abstentions because it only sees retrieved evidence.
+- **Keyword-proxy false pass (FP01).** Every mode wrote "the policy reduced
+  the allowance from $45 to $60", accepting the false premise; the forbidden
+  pattern only matched the passive voice.
+- **Judge leniency.** The judge passed incomplete answers whose claims were
+  true, and passed a false abstention because the retrieved passages lacked
+  the answer.
+- **Verifier challenge counts** were summed over temperature-0 repeats, which
+  are not independent cases.
+
+### Corrective work (approved after the initial review)
+
+- Comparison-mode document selection (`agent/sources.py`): documents named
+  in the question or by the planner first; otherwise one bounded relevance
+  discovery search; passages interleaved by source before the evidence cap;
+  refinement reuses the selection; limitations recorded in the trace and in
+  benchmark records. Regression tests use nine documents, irrelevant ones
+  sorting first, and similarly named policy versions.
+- Label revisions versioned separately from the approved labels
+  (`evals/label_revisions.jsonl`): FP01 approved; T01, V05, C01 proposed for
+  review. Scoring 1.1 adds optional facts and reproduces the 1.0 scores
+  exactly under labels 1.0.
+- Reports can rescore saved answers into a separate directory at a chosen
+  label version; `python -m evals compare` scores the initial and post-fix
+  results with one scoring version and shows the scorer's effect separately.
+- Judge rubric 2 and 13 calibration answers (see
+  `docs/EVALUATION_CHANGELOG.md`).
+- A post-fix run of Standard and Agentic (same corpus, model digest,
+  configuration and seeds) is stored separately; its results are pending
+  review and are not claimed anywhere.
+
 ## Carried forward to later phases
 
 ### Required evaluation regression cases (Phase 3)
