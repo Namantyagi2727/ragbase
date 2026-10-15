@@ -171,6 +171,7 @@ def run(
 ) -> Path:
     run_dir = Path(cfg.out_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    started = time.time()
     selected = select_cases(cfg, cases)
     make_model = model_factory or default_model_factory(cfg)
     index_dir = build_index(cfg, run_dir, embeddings)
@@ -185,8 +186,10 @@ def run(
             f.write(json.dumps({"case_id": c.id, "texts": [d.page_content for d in docs],
                                 "sources": [d.metadata["source"] for d in docs]}) + "\n")
 
+    previous = json.loads((run_dir / "config.json").read_text()) if (run_dir / "config.json").exists() else {}
     meta = {"config": asdict(cfg), "environment": environment(cfg), "cases": [c.id for c in selected],
-            "dataset_review_status": sorted({c.review_status for c in selected})}
+            "dataset_review_status": sorted({c.review_status for c in selected}),
+            "runtime": previous.get("runtime", [])}
     (run_dir / "config.json").write_text(json.dumps(meta, indent=2))
 
     records_path = run_dir / "records.jsonl"
@@ -214,6 +217,14 @@ def run(
 
     if "original" in cfg.modes:
         run_original(cfg, run_dir, selected, progress)
+
+    meta = json.loads((run_dir / "config.json").read_text())
+    meta.setdefault("runtime", []).append({
+        "started": datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
+        "finished": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "seconds": round(time.time() - started, 1),
+    })
+    (run_dir / "config.json").write_text(json.dumps(meta, indent=2))
     return run_dir
 
 

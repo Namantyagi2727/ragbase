@@ -109,7 +109,18 @@ def run(run_dir: Path, model: ChatModel, max_items: int = 10, judgments: int = 1
         for v in judged:
             by_item.setdefault(v["item"], []).append(v["verdict"]["passed"])
         consistency = round(sum(len(set(x)) == 1 for x in by_item.values()) / len(by_item), 4) if by_item else None
-    out = {"judge_model": getattr(model, "model", None), "items": len(items), "judgments_per_item": judgments,
+    digest = None
+    try:
+        import httpx
+
+        import config
+
+        tags = httpx.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=3).json().get("models", [])
+        digest = next((t.get("digest", "")[:12] for t in tags if t["name"] == getattr(model, "model", None)), None)
+    except Exception:
+        pass
+    out = {"judge_model": getattr(model, "model", None), "judge_model_digest": digest,
+           "items": len(items), "judgments_per_item": judgments,
            "failed_judgments": sum(1 for v in verdicts if not v["verdict"]), "estimate": estimate,
            "agreement_with_keyword_proxy": round(1 - len(disagreements) / len(judged), 4) if judged else None,
            "self_consistency": consistency, "disagreements": disagreements,
