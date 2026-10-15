@@ -15,6 +15,8 @@ Rubric v2 keeps correctness, faithfulness, completeness and abstention as
 separate decisions and applies the pass rule in code: an incomplete answer
 cannot pass because its claims are true, and abstention is judged against
 the expected answerability rather than the passages the system retrieved.
+Rubric v3 clarifies partially answerable questions: stating the available
+facts and saying the rest is not in the documents is complete.
 calibrate() checks the judge itself on answers whose outcome is known.
 """
 
@@ -93,7 +95,28 @@ The retrieved evidence is only what the system happened to find: it may be incom
   "not_applicable": the question is answerable and the answer attempts it.
 List concrete issues (at most 5). Keep the rationale to two sentences. Grade only what is written."""
 
-RUBRICS = {"1": (RUBRIC_V1, JudgeVerdict), "2": (RUBRIC_V2, JudgeVerdictV2)}
+# Rubric v3 changes only how completeness and abstention treat partially answerable
+# questions: stating that genuinely unavailable information is missing is complete.
+RUBRIC_V3 = RUBRIC_V2.replace(
+    """  5 = all of them; 3 = one required part missing; 1 = most missing. List each missing reference fact in
+  missing_parts. An answer that declines to answer an answerable question has completeness 1.""",
+    """  5 = all of them; 3 = one required part missing; 1 = most missing. List each missing reference fact in
+  missing_parts. An answer that declines to answer an answerable question has completeness 1.
+  When the expected answerability is "partial", a complete answer states the available reference facts and
+  says that the information listed under "Information the documents lack" is not in the documents. Saying so
+  counts as complete; never expect that information to be supplied, and do not list it in missing_parts.
+  An answer that states the available facts but does not say the rest is unavailable has completeness 3.
+  An answer that invents the unavailable information is a correctness error.""",
+).replace(
+    """  "appropriate": the expected answerability is "no" (or "partial") and the answer says the documents do not
+  contain the answer (or the missing part).""",
+    """  "appropriate": the expected answerability is "no" and the answer says the documents do not contain the
+  answer; or it is "partial" and the answer gives the available part and says the rest is missing.
+  For "partial", declining the whole question although part of it is answerable is "inappropriate".""",
+)
+assert RUBRIC_V3 != RUBRIC_V2
+
+RUBRICS = {"1": (RUBRIC_V1, JudgeVerdict), "2": (RUBRIC_V2, JudgeVerdictV2), "3": (RUBRIC_V3, JudgeVerdictV2)}
 
 
 def passes(verdict: dict, rubric: str) -> bool:
@@ -126,7 +149,7 @@ def select_items(rows: list[dict], max_items: int, modes: list[str], case_ids: l
 
 def run(run_dir: Path, model: ChatModel, max_items: int = 10, judgments: int = 1,
         modes: tuple[str, ...] = ("standard", "agentic"), case_ids: tuple[str, ...] = (),
-        seed: int = 7, estimate_only: bool = False, progress=print, rubric: str = "2",
+        seed: int = 7, estimate_only: bool = False, progress=print, rubric: str = "3",
         labels: str = "1.0", out_dir: Path | None = None) -> dict:
     """Judge a run's answers. Outputs go to out_dir (default: run_dir); run_dir is only read."""
     _, rows = load_rows(run_dir, labels=labels)
@@ -197,7 +220,7 @@ def run(run_dir: Path, model: ChatModel, max_items: int = 10, judgments: int = 1
 CALIBRATION_FILE = Path(__file__).resolve().parent / "judge_calibration.jsonl"
 
 
-def calibrate(model: ChatModel, rubric: str = "2", labels: str = "1.0", path: Path = CALIBRATION_FILE,
+def calibrate(model: ChatModel, rubric: str = "3", labels: str = "1.0", path: Path = CALIBRATION_FILE,
               progress=print) -> dict:
     """Judge hand-written answers whose pass/fail follows from the reviewed labels.
 

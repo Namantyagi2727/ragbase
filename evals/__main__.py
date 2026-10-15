@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     jud.add_argument("--modes", default="standard,agentic")
     jud.add_argument("--cases", default="")
     jud.add_argument("--estimate", action="store_true", help="time 3 items and project the full workload")
-    jud.add_argument("--rubric", default="2", choices=["1", "2"], help="1 = initial benchmark rubric")
+    jud.add_argument("--rubric", default="3", choices=["1", "2", "3"], help="1 = initial benchmark rubric")
     jud.add_argument("--labels", default="1.0")
     jud.add_argument("--out", default=None, help="write judge outputs here instead of into run_dir")
 
@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     cal = sub.add_parser("judge-calibrate", help="judge known-correct and known-incorrect answers")
     cal.add_argument("--out", required=True)
     cal.add_argument("--model", default="gemma3:12b")
-    cal.add_argument("--rubric", default="2", choices=["1", "2"])
+    cal.add_argument("--rubric", default="3", choices=["1", "2", "3"])
 
     args = ap.parse_args(argv)
     logging.disable(logging.WARNING)

@@ -181,13 +181,13 @@ def test_rubric_v2_prompt_carries_expected_answerability_and_reference_facts():
 def test_judge_writes_to_a_separate_directory(run_dir, tmp_path):
     before = {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()}
     out = judge.run(run_dir, ScriptedModel(), max_items=2, out_dir=tmp_path / "j", progress=lambda _: None)
-    assert out["rubric"] == "2" and (tmp_path / "j" / "judge_summary.json").exists()
+    assert out["rubric"] == "3" and (tmp_path / "j" / "judge_summary.json").exists()
     assert {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()} == before
 
 
 def test_calibration_plumbing_reports_false_passes_and_fails():
     out = judge.calibrate(ScriptedModel(), progress=lambda _: None)
-    assert out["items"] == 13 and out["failed_judgments"] == 0
+    assert out["items"] == 22 and out["failed_judgments"] == 0
     # the scripted judge passes everything, so every known-incorrect item is a false pass
     expected_fail = [r["id"] for r in out["results"] if not r["expected_pass"]]
     assert out["false_passes"] == expected_fail and not out["false_fails"]
@@ -205,3 +205,10 @@ def test_compare_scores_all_runs_with_one_scoring_version(run_dir, tmp_path):
     assert not out["steps"]["agentic"]["c_vs_b"]["wins"] and not out["steps"]["agentic"]["c_vs_b"]["losses"]
     assert len(out["scorer_effect"]) == len(compare.SCORER_STEPS)
     assert "Source selection" in (tmp_path / "cmp" / "comparison.md").read_text()
+
+
+def test_rubric_v3_only_changes_partial_answer_handling():
+    v2, v3 = judge.RUBRICS["2"][0], judge.RUBRICS["3"][0]
+    assert v3.startswith(v2.split("- completeness")[0])
+    assert "never expect that information to be supplied" in v3 and "never expect" not in v2
+    assert judge.RUBRICS["1"][0] == judge.RUBRIC_V1          # earlier rubrics kept for reproducibility
