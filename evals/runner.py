@@ -149,6 +149,7 @@ def run_agentic(case: Case, retriever, model: ChatModel, cfg: EvalConfig) -> dic
         "prompt_tokens": res.prompt_tokens, "completion_tokens": res.completion_tokens,
         "latency_s": round(res.elapsed_s, 3), "error": res.error,
         "trace": [f"{e['node']}: {e['summary']}" for e in res.trace],
+        "source_selections": res.source_selections,
     }
 
 

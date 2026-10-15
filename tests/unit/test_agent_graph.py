@@ -84,13 +84,14 @@ def test_complex_route_runs_planned_searches_synthesizes_and_verifies():
     assert _nodes(result) == ["plan", "retrieve", "synthesize", "verify", "finalize"]
 
 
-def test_compare_documents_searches_each_document_separately():
+def test_compare_documents_searches_each_selected_document_separately():
     plan = {"route": "complex", "compare_documents": True, "subqueries": [{"query": "meal allowance"}]}
     model = RoleModel(planner=[plan], synth=[TWO_FACTS], verifier=[ACCEPT])
     result, retriever = _run(model, k_per_query=4)
     searched_sources = [s for _, s in retriever.queries]
-    assert searched_sources == [("handbook.txt",), ("policy_2023.txt",), ("policy_2024.txt",)]
-    assert result.retrieval_calls == 3
+    # the question names both versions; the unrelated handbook is not searched
+    assert searched_sources == [("policy_2023.txt",), ("policy_2024.txt",)]
+    assert result.retrieval_calls == 2
 
 
 def test_planner_cannot_widen_search_with_unknown_sources():
