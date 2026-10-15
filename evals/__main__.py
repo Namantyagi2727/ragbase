@@ -5,7 +5,8 @@ RAGBase evaluation command line.
     python -m evals report evals/results/dev1 [--out DIR --labels 1.1 --original-from BASELINE_DIR]
     python -m evals verifier --out evals/results/verifier.json
     python -m evals tabular --out evals/results/tabular.json
-    python -m evals judge evals/results/dev1 --max-items 10 [--estimate]
+    python -m evals judge evals/results/dev1 --max-items 10 [--estimate] [--rubric 2 --out DIR]
+    python -m evals judge-calibrate --out evals/results/judge_calibration.json
 
 Official runs (--label official) are refused unless every selected case has
 review_status "approved".
@@ -66,6 +67,14 @@ def main(argv: list[str] | None = None) -> int:
     jud.add_argument("--modes", default="standard,agentic")
     jud.add_argument("--cases", default="")
     jud.add_argument("--estimate", action="store_true", help="time 3 items and project the full workload")
+    jud.add_argument("--rubric", default="2", choices=["1", "2"], help="1 = initial benchmark rubric")
+    jud.add_argument("--labels", default="1.0")
+    jud.add_argument("--out", default=None, help="write judge outputs here instead of into run_dir")
+
+    cal = sub.add_parser("judge-calibrate", help="judge known-correct and known-incorrect answers")
+    cal.add_argument("--out", required=True)
+    cal.add_argument("--model", default="gemma3:12b")
+    cal.add_argument("--rubric", default="2", choices=["1", "2"])
 
     args = ap.parse_args(argv)
     logging.disable(logging.WARNING)
@@ -133,8 +142,18 @@ def main(argv: list[str] | None = None) -> int:
         from evals import judge
 
         out = judge.run(Path(args.run_dir), OllamaChatModel(model=args.model, timeout_s=600), args.max_items,
-                        args.judgments, tuple(_csv(args.modes)), tuple(_csv(args.cases)), estimate_only=args.estimate)
+                        args.judgments, tuple(_csv(args.modes)), tuple(_csv(args.cases)), estimate_only=args.estimate,
+                        rubric=args.rubric, labels=args.labels, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({k: v for k, v in out.items() if k != "disagreements"}, indent=2))
+        return 0
+
+    if args.cmd == "judge-calibrate":
+        from evals import judge
+
+        out = judge.calibrate(OllamaChatModel(model=args.model, timeout_s=600), rubric=args.rubric)
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(json.dumps(out, indent=2))
+        print(json.dumps({k: v for k, v in out.items() if k != "results"}, indent=2))
         return 0
     return 1
 

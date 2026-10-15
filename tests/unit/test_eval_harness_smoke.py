@@ -155,3 +155,39 @@ def test_unique_claim_summary_counts_each_claim_once_across_repeats():
     u = verifier_eval.summarize_unique(results)
     assert u["unique_claims"] == 2 and u["accepted_supported"] == 1 and u["inconsistent_unsupported"] == 1
     assert u["false_positive_rate"] == "0/1"
+
+
+@pytest.mark.parametrize("scores,abstention,expected", [
+    ((5, 5, 5), "not_applicable", True),
+    ((5, 5, 3), "not_applicable", False),      # incomplete answers cannot pass on correct claims alone
+    ((5, 5, 1), "inappropriate", False),
+    ((3, 5, 5), "not_applicable", False),
+    ((5, 3, 5), "not_applicable", False),
+    ((5, 5, 5), "appropriate", True),
+])
+def test_rubric_v2_pass_rule_requires_every_dimension(scores, abstention, expected):
+    c, f, comp = scores
+    assert judge.passes({"correctness": c, "faithfulness": f, "completeness": comp, "abstention": abstention},
+                        "2") is expected
+
+
+def test_rubric_v2_prompt_carries_expected_answerability_and_reference_facts():
+    case = next(c for c in load_cases() if c.id == "V02")
+    msgs = judge.judge_messages(case, "answer", ["evidence"], rubric="2")
+    assert "Expected answerability: yes" in msgs[1]["content"] and "director" in msgs[1]["content"]
+    assert "not with the retrieved evidence" in msgs[0]["content"]
+
+
+def test_judge_writes_to_a_separate_directory(run_dir, tmp_path):
+    before = {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()}
+    out = judge.run(run_dir, ScriptedModel(), max_items=2, out_dir=tmp_path / "j", progress=lambda _: None)
+    assert out["rubric"] == "2" and (tmp_path / "j" / "judge_summary.json").exists()
+    assert {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()} == before
+
+
+def test_calibration_plumbing_reports_false_passes_and_fails():
+    out = judge.calibrate(ScriptedModel(), progress=lambda _: None)
+    assert out["items"] == 13 and out["failed_judgments"] == 0
+    # the scripted judge passes everything, so every known-incorrect item is a false pass
+    expected_fail = [r["id"] for r in out["results"] if not r["expected_pass"]]
+    assert out["false_passes"] == expected_fail and not out["false_fails"]
