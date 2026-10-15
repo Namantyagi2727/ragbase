@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 
@@ -33,13 +34,15 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
-    sys.path.insert(0, args.snapshot)
+    snapshot = os.path.realpath(args.snapshot)
+    sys.path.insert(0, snapshot)
     logging.disable(logging.WARNING)
     import ingest  # the original module from the snapshot
     import retriever
 
-    assert ingest.__file__.startswith(args.snapshot) and retriever.__file__.startswith(args.snapshot), \
-        "original modules must come from the snapshot"
+    for module in (ingest, retriever):
+        if not os.path.realpath(module.__file__).startswith(snapshot + os.sep):
+            raise SystemExit(f"{module.__name__} was not loaded from the snapshot: {module.__file__}")
 
     ingest.main(ingest_dir=args.corpus, index_dir=args.index_dir)
     ret = retriever.get_retriever(index_dir=args.index_dir, top_k=args.top_k, reranking=True)

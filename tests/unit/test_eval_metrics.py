@@ -143,7 +143,7 @@ def test_identical_quote_from_the_wrong_source_gets_no_citation_credit():
 def test_mode_specific_retrieval_uses_each_modes_own_evidence():
     c = _sourced_case()
     shared = [{"source": "policy_a.txt", "text": QUOTE}]
-    found = {"answer": "Within 30 days [1].", "evidence": [
+    found = {"answer": "Within 30 days [1].", "citations": {"ok": True}, "evidence": [
         {"eid": "1", "source": "policy_a.txt", "text": QUOTE}], "cited_ids": ["1"]}
     missed = {"answer": "Within 30 days.", "evidence": [
         {"eid": "1", "source": "policy_b.txt", "text": QUOTE},
@@ -163,3 +163,12 @@ def test_mode_fixed_budget_counts_only_the_first_k_passages():
     assert s["mode_recall_at_k"] == 0.0     # outside the fixed budget of 5
     assert s["pool_recall"] == 1.0          # but recovered in the final pool
     assert s["pool_size"] == 6
+
+
+def test_citation_relevance_is_not_applicable_without_evidence_id_citations():
+    c = _sourced_case()
+    original_style = {"answer": "Within 30 days. Sources: [policy @ p.1]", "citations": None,
+                      "evidence": [{"eid": "1", "source": "policy_a.txt", "text": QUOTE}], "cited_ids": []}
+    s = m.score_record(c, original_style, [], 5)
+    assert s["cited_precision"] is None and s["fact_evidence_cited"] is None
+    assert s["mode_recall_at_k"] == 1.0     # its own retrieval is still scored

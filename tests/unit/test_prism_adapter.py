@@ -258,3 +258,8 @@ def test_schema_outline_describes_nested_fields_and_enums_without_raw_schema():
     assert "claim_number (required): whole number from 1 to 12" in verifier
     for text in (plan, verifier):
         assert "{" not in text and "JSON" not in text and "$defs" not in text
+
+
+def test_prism_caller_timeout_cannot_extend_configured_timeout():
+    m = PrismChatModel(api_key=KEY, timeout_s=20)
+    assert m._effective_timeout(170) == 20 and m._effective_timeout(3) == 3

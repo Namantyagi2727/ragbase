@@ -176,8 +176,9 @@ def score_record(case: Case, record: dict, shared_ranked: list[Item], k: int) ->
         **{f"mode_{k_}": v for k_, v in retrieval_metrics(case, items, k).items()},
         "pool_recall": pool_recall(case, items),
         "pool_size": len(items),
-        # 2. citation relevance (source-aware)
-        **citation_relevance(case, cited),
+        # 2. citation relevance (source-aware); not applicable to answers without evidence-ID citations
+        **(citation_relevance(case, cited) if record.get("citations") is not None
+           else {"cited_precision": None, "fact_evidence_cited": None}),
     }
     return out
 

@@ -107,6 +107,8 @@ def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categor
     meta = out["meta"]
     cfg, env = meta["config"], meta["environment"]
     md = [f"# RAGBase evaluation — {cfg['label']} run", ""]
+    for err in meta.get("mode_errors", []):
+        md += [f"> **{err['mode']} mode did not run:** {err['error']}.", ""]
     if cfg["label"] != "official":
         md += ["> **Not an official benchmark result.** Labels may be unapproved or the run is for development.", ""]
     md += [f"Dataset review status: {', '.join(meta['dataset_review_status'])} · corpus {env['corpus_version']} "

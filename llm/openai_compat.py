@@ -154,6 +154,10 @@ class PrismChatModel:
 
     # -- request -----------------------------------------------------------------
 
+    def _effective_timeout(self, timeout_s: float | None) -> float:
+        """A caller's limit (e.g. the agent's remaining budget) can shorten, never extend, the configured timeout."""
+        return min(timeout_s, self.timeout_s) if timeout_s else self.timeout_s
+
     def complete(
         self,
         messages: list[Message],
@@ -171,14 +175,14 @@ class PrismChatModel:
         }
         start = time.perf_counter()
         try:
-            with httpx.Client(timeout=timeout_s or self.timeout_s, transport=self._transport) as client:
+            with httpx.Client(timeout=self._effective_timeout(timeout_s), transport=self._transport) as client:
                 resp = client.post(
                     f"{self.base_url}/v1/chat/completions",
                     json=payload,
                     headers={"Authorization": f"Bearer {self._api_key}"},
                 )
         except httpx.TimeoutException as e:
-            raise LLMTimeoutError(f"Prism did not respond within {timeout_s or self.timeout_s:.0f}s") from e
+            raise LLMTimeoutError(f"Prism did not respond within {self._effective_timeout(timeout_s):.0f}s") from e
         except httpx.TransportError as e:
             raise LLMUnavailableError(f"Cannot reach Prism at {self.base_url}") from e
         latency = time.perf_counter() - start

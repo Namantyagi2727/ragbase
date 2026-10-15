@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -169,7 +170,7 @@ def run(
     cases: Optional[list[Case]] = None,
     progress: Callable[[str], None] = print,
 ) -> Path:
-    run_dir = Path(cfg.out_dir)
+    run_dir = Path(cfg.out_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
     started = time.time()
     selected = select_cases(cfg, cases)
@@ -215,10 +216,17 @@ def run(
                     out.flush()
                     progress(f"[{mode} r{repeat}] {c.id} {rec.get('status', '')} {rec.get('latency_s', '')}s")
 
+    original_error = None
     if "original" in cfg.modes:
-        run_original(cfg, run_dir, selected, progress)
+        try:
+            run_original(cfg, run_dir, selected, progress)
+        except subprocess.CalledProcessError as e:
+            original_error = f"original-code subprocess failed with exit status {e.returncode}"
+            progress(f"[original] {original_error}; other modes are unaffected")
 
     meta = json.loads((run_dir / "config.json").read_text())
+    if original_error:
+        meta.setdefault("mode_errors", []).append({"mode": "original", "error": original_error})
     meta.setdefault("runtime", []).append({
         "started": datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
         "finished": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -230,11 +238,16 @@ def run(
 
 def run_original(cfg: EvalConfig, run_dir: Path, cases: list[Case], progress=print) -> None:
     """Run the pre-upgrade code in an isolated subprocess on the same corpus."""
-    snapshot = run_dir / f"original_{cfg.original_ref}"
+    snapshot = (run_dir / f"original_{cfg.original_ref}").resolve()
     if not snapshot.exists():
-        snapshot.mkdir(parents=True)
+        # Extract into a temporary directory and rename, so an interrupted
+        # extraction never leaves a partial snapshot that looks complete.
+        partial = snapshot.with_name(snapshot.name + ".partial")
+        shutil.rmtree(partial, ignore_errors=True)
+        partial.mkdir(parents=True)
         archive = subprocess.run(["git", "archive", cfg.original_ref], cwd=REPO, capture_output=True, check=True)
-        subprocess.run(["tar", "-x", "-C", str(snapshot)], input=archive.stdout, check=True)
+        subprocess.run(["tar", "-x", "-C", str(partial)], input=archive.stdout, check=True)
+        partial.rename(snapshot)
     cmd = [sys.executable, "-I", str(EVALS / "original_snapshot.py"), "--snapshot", str(snapshot),
            "--corpus", str(CORPUS_DIR), "--index-dir", str(run_dir / "original_index"),
            "--cases", json.dumps([{"id": c.id, "category": c.category, "question": c.question} for c in cases]),
