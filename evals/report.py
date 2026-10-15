@@ -14,27 +14,48 @@ from pathlib import Path
 from citations import _NON_EVIDENCE_RE, is_abstention
 from evals import metrics as m
 from evals.dataset import load_cases
+from evals.verifier_eval import summarize_unique
 
 MODES = ["original", "standard", "agentic"]
 
 
-def load_rows(run_dir: Path) -> tuple[dict, list[dict]]:
-    meta = json.loads((run_dir / "config.json").read_text())
-    cases = {c.id: c for c in load_cases()}
+def _fixed_retrieval(run_dir: Path) -> dict:
     fixed = {}
     for line in (run_dir / "fixed_retrieval.jsonl").read_text().splitlines():
         entry = json.loads(line)
         fixed[entry["case_id"]] = [{"source": src, "text": txt} for src, txt in zip(entry["sources"], entry["texts"], strict=True)]
+    return fixed
+
+
+def load_rows(run_dir: Path, labels: str = "1.0", include_proposed: bool = False,
+              original_from: Path | None = None) -> tuple[dict, list[dict]]:
+    """Score a run's records. Reads only; nothing in run_dir is modified.
+
+    original_from: take the original-mode records from another run (e.g. the
+    pre-fix baseline, when the original code and its conditions are unchanged).
+    """
+    meta = json.loads((run_dir / "config.json").read_text())
+    cases = {c.id: c for c in load_cases(labels=labels, include_proposed=include_proposed)}
     k = meta["config"]["top_k"]
+    sources = [(run_dir, lambda rec: original_from is None or rec["mode"] != "original")]
+    if original_from is not None:
+        sources.append((Path(original_from), lambda rec: rec["mode"] == "original"))
     rows = []
-    for line in (run_dir / "records.jsonl").read_text().splitlines():
-        rec = json.loads(line)
-        case = cases[rec["case_id"]]
-        if rec["mode"] == "original":
-            rec["abstained"] = is_abstention(rec.get("answer") or "")
-            rec["free_form_references"] = len(_NON_EVIDENCE_RE.findall(rec.get("answer") or ""))
-        scores = m.score_record(case, rec, fixed.get(case.id, []), k)
-        rows.append({**rec, **scores, "answerable": case.answerable, "required": case.required})
+    for src_dir, keep in sources:
+        fixed = _fixed_retrieval(src_dir)
+        for line in (src_dir / "records.jsonl").read_text().splitlines():
+            rec = json.loads(line)
+            if not keep(rec):
+                continue
+            case = cases[rec["case_id"]]
+            if rec["mode"] == "original":
+                rec["abstained"] = is_abstention(rec.get("answer") or "")
+                rec["free_form_references"] = len(_NON_EVIDENCE_RE.findall(rec.get("answer") or ""))
+            scores = m.score_record(case, rec, fixed.get(case.id, []), k)
+            rows.append({**rec, **scores, "answerable": case.answerable, "required": case.required})
+    meta = {**meta, "scoring": {"labels": labels, "include_proposed_revisions": include_proposed,
+                                "scoring_version": m.SCORING_VERSION,
+                                "original_from": str(original_from) if original_from else None}}
     return meta, rows
 
 
@@ -46,8 +67,12 @@ def _fmt(v) -> str:
     return str(v)
 
 
-def build(run_dir: Path) -> dict:
-    meta, rows = load_rows(run_dir)
+def build(run_dir: Path, out_dir: Path | None = None, labels: str = "1.0", include_proposed: bool = False,
+          original_from: Path | None = None) -> dict:
+    """Score run_dir and write the report to out_dir (default: run_dir itself)."""
+    meta, rows = load_rows(run_dir, labels, include_proposed, original_from)
+    out_dir = Path(out_dir) if out_dir else run_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
     modes = [mo for mo in MODES if any(r["mode"] == mo for r in rows)]
     by_mode = {mo: [r for r in rows if r["mode"] == mo] for mo in modes}
     summary = {mo: {**m.aggregate(rs), "repeat_spread": m.repeat_spread(rs)} for mo, rs in by_mode.items()}
@@ -78,11 +103,12 @@ def build(run_dir: Path) -> dict:
 
     out = {"meta": meta, "summary": summary, "by_category": by_cat, "comparisons": comparisons,
            "agent": agent_info, "required_regressions": required}
-    _write(run_dir, out, rows, modes, categories)
+    _write(out_dir, out, rows, modes, categories, supplementary_from=run_dir)
     return out
 
 
-def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categories: list[str]) -> None:
+def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categories: list[str],
+           supplementary_from: Path | None = None) -> None:
     keep = ["mode", "repeat", "case_id", "category", "answerable", "required", "keyword_correct", "facts_covered",
             "facts_total", "forbidden_hits", "abstained", "citation_ids_valid", "citation_coverage", "cited_precision",
             "fact_evidence_cited", "shared_recall_at_k", "mode_hit_at_k", "mode_recall_at_k", "pool_recall", "pool_size",
@@ -117,6 +143,11 @@ def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categor
            f"embeddings `{cfg['embed_model']}` · reranking {cfg['reranking']} · top-k {cfg['top_k']} · "
            f"{cfg['repeats']} repeat(s), base seed {cfg['base_seed']} · temperature "
            f"{cfg['temperature'] if cfg['temperature'] is not None else 'application defaults'}", "",
+           f"Scoring: labels v{meta['scoring']['labels']}"
+           + (" including **proposed** (unapproved) revisions" if meta["scoring"]["include_proposed_revisions"] else "")
+           + f" · scoring implementation v{meta['scoring']['scoring_version']}"
+           + (f" · original-mode records reused from `{meta['scoring']['original_from']}`"
+              if meta["scoring"]["original_from"] else ""), "",
            "Correctness below is a **keyword proxy** against reviewed reference facts; it is not semantic ground truth.", "",
            "## Summary by mode", "",
            "| Metric | " + " | ".join(modes) + " |", "|---|" + "---|" * len(modes)]
@@ -164,7 +195,7 @@ def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categor
     md += ["", "## Required regression cases", ""]
     for mo, cases_ in out["required_regressions"].items():
         md.append(f"- {mo}: " + ", ".join(f"{cid} {sum(v)}/{len(v)}" for cid, v in sorted(cases_.items())))
-    md += _supplementary_sections(run_dir)
+    md += _supplementary_sections(supplementary_from or run_dir)
     md += ["", "## Limitations", "",
            "- Keyword matching is a proxy; paraphrases can be missed and lucky matches counted.",
            "- Small sample (about 40 cases); differences of a few cases are within run-to-run variation.",
@@ -180,15 +211,19 @@ def _supplementary_sections(run_dir: Path) -> list[str]:
     vc_path = run_dir / "verifier_challenge.json"
     if vc_path.exists():
         vc = json.loads(vc_path.read_text())
-        c = vc["summary"]["claims"]
+        u = summarize_unique(vc["results"])
         md += ["", "## Verifier challenge set (fixed answer/evidence pairs)", "",
-               f"Model `{vc['model']}`, {vc['repeats']} repeat(s). Claim-level outcomes vs. labels for support by the cited evidence:", "",
+               f"Model `{vc['model']}`, {vc['repeats']} repeat(s) at temperature 0. Counts are per distinct claim "
+               f"({u['unique_claims']} claims: {u['should_accept']} should be accepted, {u['should_reject']} rejected); "
+               "repeats are not independent cases. A claim whose repeats disagree is counted as inconsistent.", "",
                "| | Should accept | Should reject |", "|---|---|---|",
-               f"| Accepted | {c['accepted_supported']} | {c['accepted_unsupported (false positive)']} |",
-               f"| Rejected | {c['rejected_supported (false negative)']} | {c['rejected_unsupported']} |",
-               f"| Undecided | {c['undecided_supported']} | {c['undecided_unsupported']} |", "",
-               f"False-positive rate {_fmt(c['false_positive_rate'])} · false-negative rate {_fmt(c['false_negative_rate'])}.",
-               "Answer-level (verified / not verified) by label: " + "; ".join(
+               f"| Accepted | {u['accepted_supported']} | {u['accepted_unsupported (false positive)']} |",
+               f"| Rejected | {u['rejected_supported (false negative)']} | {u['rejected_unsupported']} |",
+               f"| Undecided | {u['undecided_supported']} | {u['undecided_unsupported']} |",
+               f"| Inconsistent across repeats | {u['inconsistent_supported']} | {u['inconsistent_unsupported']} |", "",
+               f"False positives {u['false_positive_rate']} · false negatives {u['false_negative_rate']}. "
+               "Errors: " + (", ".join(f"{case} ({outcome})" for case, outcome in u["errors"]) or "none") + ".",
+               "Answer-level (verified / not verified) by label, over all repeats: " + "; ".join(
                    f"{k}: {v}" for k, v in vc["summary"]["answers_by_label"].items()),
                "Required cases: " + ", ".join(f"{k} → {v}" for k, v in vc["summary"]["required"].items())]
     tab_runs = sorted(run_dir.glob("tabular_run*.json"))

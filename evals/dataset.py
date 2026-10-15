@@ -22,6 +22,8 @@ EVALS = Path(__file__).resolve().parent
 CORPUS_DIR = EVALS / "corpus"
 TABULAR_DIR = EVALS / "tabular"
 CASES_FILE = EVALS / "cases.jsonl"
+REVISIONS_FILE = EVALS / "label_revisions.jsonl"
+LABEL_VERSIONS = ("1.0", "1.1")
 VERIFIER_FILE = EVALS / "verifier_cases.jsonl"
 TABULAR_FILE = EVALS / "tabular_cases.jsonl"
 
@@ -46,6 +48,8 @@ class ExpectedFact(BaseModel):
     # Keyword proxy: every group must match at least one of its alternatives.
     keywords: list[list[str]] = Field(min_length=1)
     evidence: list[Evidence] = Field(min_length=1)
+    # Optional facts are still reported (facts_covered) but not needed for keyword_correct.
+    required: bool = True
 
 
 class ForbiddenFact(BaseModel):
@@ -160,8 +164,54 @@ def _load(path: Path, model):
     return [model.model_validate_json(line) for line in path.read_text().splitlines() if line.strip()]
 
 
-def load_cases(path: Path = CASES_FILE) -> list[Case]:
-    return _load(path, Case)
+class LabelRevision(BaseModel):
+    """A versioned change to approved labels. cases.jsonl itself stays at version 1.0."""
+
+    model_config = ConfigDict(extra="forbid")
+    version: str
+    case_id: str
+    kind: Literal["forbidden_pattern", "optional_fact", "keywords"]
+    review_status: ReviewStatus
+    rationale: str
+    forbidden_facts: Optional[list[ForbiddenFact]] = None
+    fact_updates: dict[str, dict] = Field(default_factory=dict)
+
+
+def load_revisions(path: Path = REVISIONS_FILE) -> list[LabelRevision]:
+    return _load(path, LabelRevision) if path.exists() else []
+
+
+def apply_revisions(cases: list[Case], revisions: list[LabelRevision], version: str,
+                    include_proposed: bool = False) -> list[Case]:
+    """Cases as of a label version. Proposed revisions apply only when asked for."""
+    wanted = [r for r in revisions if _version_key(r.version) <= _version_key(version)
+              and (r.review_status == "approved" or (include_proposed and r.review_status == "proposed"))]
+    by_id = {c.id: c for c in cases}
+    for rev in wanted:
+        case = by_id[rev.case_id]
+        data = case.model_dump()
+        if rev.forbidden_facts is not None:
+            data["forbidden_facts"] = [f.model_dump() for f in rev.forbidden_facts]
+        facts = {f["id"]: f for f in data["expected_facts"]}
+        for fact_id, update in rev.fact_updates.items():
+            facts[fact_id].update(update)
+        by_id[rev.case_id] = Case.model_validate(data)
+    return [by_id[c.id] for c in cases]
+
+
+def _version_key(v: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in v.split("."))[:2]
+
+
+def load_cases(path: Path = CASES_FILE, labels: str = "1.0", include_proposed: bool = False) -> list[Case]:
+    """Benchmark cases at a label version: "1.0" is cases.jsonl as approved; later
+    versions apply label_revisions.jsonl on top."""
+    if labels not in LABEL_VERSIONS:
+        raise ValueError(f"unknown label version {labels!r}; known: {', '.join(LABEL_VERSIONS)}")
+    cases = _load(path, Case)
+    if labels == "1.0" and not include_proposed:
+        return cases
+    return apply_revisions(cases, load_revisions(), labels, include_proposed)
 
 
 def load_verifier_cases(path: Path = VERIFIER_FILE) -> list[VerifierCase]:

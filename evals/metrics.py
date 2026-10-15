@@ -28,6 +28,10 @@ from typing import Iterable
 from citations import CITE_RE, is_absence_statement, is_abstention
 from evals.dataset import Case, normalize
 
+# Scoring implementation version. 1.1 adds optional expected facts; with labels
+# 1.0 (every fact required) it reproduces the 1.0 scores exactly.
+SCORING_VERSION = "1.1"
+
 NEGATION_CUE = re.compile(
     r"\b(not|no|never|cannot|can't|isn't|aren't|doesn't|don't|didn't|won't|wasn't|weren't|"
     r"incorrect|false|wrong|rather than|instead of|unlike|neither|nor|premise)\b",
@@ -145,13 +149,14 @@ def score_record(case: Case, record: dict, shared_ranked: list[Item], k: int) ->
     abstained = bool(record.get("abstained"))
 
     coverage = [fact_covered(f.keywords, answer) for f in case.expected_facts]
+    required_ok = all(cov for cov, f in zip(coverage, case.expected_facts, strict=True) if f.required)
     wrong = forbidden_hits([(f.statement, f.pattern) for f in case.forbidden_facts], answer)
     if record.get("error"):
         correct = False
     elif case.answerable == "yes":
-        correct = all(coverage) and not wrong and not abstained
+        correct = required_ok and not wrong and not abstained
     elif case.answerable == "partial":
-        correct = all(coverage) and acknowledges_missing(answer) and not wrong
+        correct = required_ok and acknowledges_missing(answer) and not wrong
     else:
         correct = (abstained or acknowledges_missing(answer)) and not wrong
 

@@ -137,3 +137,21 @@ def test_preflight_reports_unreachable_ollama(monkeypatch):
     monkeypatch.setattr(runner.httpx, "get", down)
     problem = runner.preflight(runner.EvalConfig(out_dir="x"))
     assert problem and "not reachable" in problem
+
+
+def test_report_to_a_separate_directory_leaves_the_run_untouched(run_dir, tmp_path):
+    before = {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()}
+    out = report.build(run_dir, tmp_path / "rescored", labels="1.1", include_proposed=True)
+    assert {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()} == before
+    assert (tmp_path / "rescored" / "report.md").exists()
+    assert out["meta"]["scoring"]["labels"] == "1.1" and out["meta"]["scoring"]["include_proposed_revisions"]
+    assert "proposed" in (tmp_path / "rescored" / "report.md").read_text()
+
+
+def test_unique_claim_summary_counts_each_claim_once_across_repeats():
+    results = [{"id": "A", "claims": [{"claim": "x", "expected": "accept", "predicted": "accepted"},
+                                      {"claim": "y", "expected": "reject", "predicted": p}]}
+               for p in ("accepted", "rejected", "accepted")]
+    u = verifier_eval.summarize_unique(results)
+    assert u["unique_claims"] == 2 and u["accepted_supported"] == 1 and u["inconsistent_unsupported"] == 1
+    assert u["false_positive_rate"] == "0/1"

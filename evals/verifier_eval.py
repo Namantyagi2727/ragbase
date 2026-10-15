@@ -69,6 +69,41 @@ def summarize(results: list[dict]) -> dict:
     }
 
 
+def summarize_unique(results: list[dict]) -> dict:
+    """Counts per distinct challenge claim, not per repeated verdict.
+
+    Repeats at temperature 0 are not independent cases, so each claim counts
+    once: its outcome when every repeat agrees, otherwise "inconsistent".
+    """
+    outcomes: dict[tuple, dict] = {}
+    for r in results:
+        for i, c in enumerate(r["claims"]):
+            entry = outcomes.setdefault((r["id"], i), {"case": r["id"], "claim": c["claim"],
+                                                        "expected": c["expected"], "predicted": []})
+            entry["predicted"].append(c["predicted"])
+    cells = Counter()
+    claims = []
+    for e in outcomes.values():
+        pred = e["predicted"][0] if len(set(e["predicted"])) == 1 else "inconsistent"
+        cells[(pred, e["expected"])] += 1
+        claims.append({**e, "outcome": pred})
+    n_accept = sum(1 for e in outcomes.values() if e["expected"] == "accept")
+    n_reject = len(outcomes) - n_accept
+    fp, fn = cells[("accepted", "reject")], cells[("rejected", "accept")]
+    return {
+        "unique_claims": len(outcomes), "should_accept": n_accept, "should_reject": n_reject,
+        "accepted_supported": cells[("accepted", "accept")], "accepted_unsupported (false positive)": fp,
+        "rejected_unsupported": cells[("rejected", "reject")], "rejected_supported (false negative)": fn,
+        "undecided_supported": cells[("undecided", "accept")], "undecided_unsupported": cells[("undecided", "reject")],
+        "inconsistent_supported": cells[("inconsistent", "accept")],
+        "inconsistent_unsupported": cells[("inconsistent", "reject")],
+        "false_positive_rate": f"{fp}/{n_reject}", "false_negative_rate": f"{fn}/{n_accept}",
+        "errors": sorted({(c["case"], c["outcome"]) for c in claims
+                          if (c["outcome"] == "accepted") != (c["expected"] == "accept")}),
+    }
+
+
 def run(cases: list[VerifierCase], model: ChatModel, repeats: int = 1) -> dict:
     results = [dict(evaluate_case(c, model), repeat=i + 1) for i in range(repeats) for c in cases]
-    return {"model": getattr(model, "model", None), "repeats": repeats, "summary": summarize(results), "results": results}
+    return {"model": getattr(model, "model", None), "repeats": repeats, "summary": summarize(results),
+            "unique": summarize_unique(results), "results": results}

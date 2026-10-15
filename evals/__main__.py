@@ -2,7 +2,7 @@
 RAGBase evaluation command line.
 
     python -m evals run --out evals/results/dev1 --modes standard,agentic --repeats 1 --tags ci_subset
-    python -m evals report evals/results/dev1
+    python -m evals report evals/results/dev1 [--out DIR --labels 1.1 --original-from BASELINE_DIR]
     python -m evals verifier --out evals/results/verifier.json
     python -m evals tabular --out evals/results/tabular.json
     python -m evals judge evals/results/dev1 --max-items 10 [--estimate]
@@ -44,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
 
     rep = sub.add_parser("report", help="score a run and write report.md / summary.csv")
     rep.add_argument("run_dir")
+    rep.add_argument("--out", default=None, help="write the report here instead of into run_dir")
+    rep.add_argument("--labels", default="1.0", help="label version to score against (1.0 = as approved)")
+    rep.add_argument("--include-proposed", action="store_true", help="also apply proposed, unapproved label revisions")
+    rep.add_argument("--original-from", default=None, help="take original-mode records from this earlier run")
 
     ver = sub.add_parser("verifier", help="verifier challenge set")
     ver.add_argument("--out", required=True)
@@ -94,8 +98,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "report":
         from evals import report
 
-        report.build(Path(args.run_dir))
-        print(f"Report: {Path(args.run_dir) / 'report.md'}")
+        out_dir = Path(args.out) if args.out else Path(args.run_dir)
+        report.build(Path(args.run_dir), out_dir, labels=args.labels, include_proposed=args.include_proposed,
+                     original_from=Path(args.original_from) if args.original_from else None)
+        print(f"Report: {out_dir / 'report.md'}")
         return 0
 
     from llm.ollama import OllamaChatModel
