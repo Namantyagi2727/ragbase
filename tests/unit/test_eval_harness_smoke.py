@@ -67,7 +67,7 @@ def test_run_writes_records_config_and_fixed_retrieval(run_dir):
     meta = json.loads((run_dir / "config.json").read_text())
     assert meta["config"]["label"] == "development"
     assert meta["environment"]["corpus_checksum"] and meta["environment"]["git_commit"]
-    assert meta["dataset_review_status"] == ["proposed"]
+    assert meta["dataset_review_status"] == ["approved"]
     assert len((run_dir / "fixed_retrieval.jsonl").read_text().splitlines()) == 4
 
 
@@ -109,10 +109,23 @@ def test_verifier_challenge_plumbing():
     assert out["summary"]["n_runs"] == 4
 
 
-def test_official_run_is_refused_while_labels_are_unapproved(tmp_path, capsys):
-    assert all(c.review_status == "proposed" for c in load_cases())
-    code = cli(["run", "--out", str(tmp_path / "x"), "--label", "official", "--repeats", "1", "--cases", "F01"])
+def test_official_run_is_refused_when_any_selected_case_is_unapproved(tmp_path, capsys, monkeypatch):
+    from evals import dataset
+
+    cases = load_cases()
+    cases[0] = cases[0].model_copy(update={"review_status": "proposed"})
+    monkeypatch.setattr(dataset, "load_cases", lambda *a, **k: cases)
+    code = cli(["run", "--out", str(tmp_path / "x"), "--label", "official", "--repeats", "1",
+                "--cases", f"{cases[0].id},{cases[1].id}"])
     assert code == 2 and "Refusing an official run" in capsys.readouterr().err
+
+
+def test_official_run_passes_the_gate_when_selected_cases_are_approved(tmp_path, capsys, monkeypatch):
+    assert all(c.review_status == "approved" for c in load_cases())
+    monkeypatch.setattr(runner, "preflight", lambda cfg: "stopped after the approval gate (test)")
+    code = cli(["run", "--out", str(tmp_path / "y"), "--label", "official", "--repeats", "1", "--cases", "F01"])
+    err = capsys.readouterr().err
+    assert code == 3 and "Refusing an official run" not in err and "stopped after the approval gate" in err
 
 
 def test_preflight_reports_unreachable_ollama(monkeypatch):
