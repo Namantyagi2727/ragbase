@@ -10,8 +10,8 @@ test results and known limitations.
 | 0 | Repository audit and implementation plan | Done |
 | 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
 | 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — merged ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
-| 2 | Optional Prism gateway integration | Done; verified against a real local Prism — in review ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
-| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Not started |
+| 2 | Optional Prism gateway integration | Done — merged ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
+| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | In progress — dataset awaiting label review ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
 | 4 | Streamlit integration and public demo | Not started |
 | 5 | Documentation and final review | Not started |
 
@@ -415,6 +415,44 @@ failed both attempts and was recorded as `not_verified`.
 Record the originating provider on cache entries; a per-key guardrail policy
 for document-grounded clients; a context-length pass-through; native
 structured output.
+
+## Phase 3 — Evaluation framework (in progress)
+
+### Two-column PDF extraction
+
+`ingest.page_text()` reads a page column by column only when the layout is
+clearly two-column: an empty vertical band in the middle 30-70% of the page
+(every line leaving a gap of at least 12 pt there), no more than 15% of lines
+crossing it (full-width headings), and a run of at least three lines with
+prose (4+ words per segment on average) on both sides. Table rows (several
+cells on one side) and full-width lines stay whole; a vertical gap above 2.5x
+normal line spacing ends a column block. Every other page keeps pdfplumber's
+original output.
+
+Tests were written first (4 of 6 failed before the change). On real files:
+212 single-column PDFs produce identical text; on the two-column driver's
+manual 66 of 85 pages switch, the penalties table page does not, and the
+under-21 zero-tolerance passage reads in order. Known side effect: a
+right-aligned running header moves to the start of the right column.
+**Previously indexed two-column PDFs must be re-ingested** to benefit; their
+chunk text, and therefore chunk IDs, will change.
+
+### Synthetic corpus and labels
+
+- `evals/build_corpus.py` writes 8 fictional documents (TXT, DOCX, single- and
+  two-column PDF) and a CSV. A SHA-256 manifest is checked in CI; rebuilds made
+  seconds apart were byte-identical after fixing DOCX zip timestamps (an
+  earlier "identical" result had only held within the zip format's 2-second
+  timestamp resolution).
+- 42 RAG cases across 10 categories, each expected fact with an exact evidence
+  quote; 3 required regression cases (under-21 / over-21 / second violation).
+- 20 verifier challenge pairs with per-claim labels, including the Phase 1B
+  false positive in clean and interleaved-extraction form.
+- 9 tabular cases; expected values computed from the CSV by the executor.
+- All labels are `proposed`. CI checks schema, sources, quotes, checksums and
+  computed values — consistency, not correctness.
+- Forbidden-fact patterns are evaluated per sentence with negation skipping;
+  a probe test guards against false matches on correct contrast sentences.
 
 ## Carried forward to later phases
 
