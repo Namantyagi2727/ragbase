@@ -72,12 +72,11 @@ def main(argv: list[str] | None = None) -> int:
     jud.add_argument("--labels", default="1.0")
     jud.add_argument("--out", default=None, help="write judge outputs here instead of into run_dir")
 
-    cmp_ = sub.add_parser("compare", help="initial vs post-fix results under one scoring version")
-    cmp_.add_argument("--initial", required=True)
-    cmp_.add_argument("--postfix", required=True)
+    cmp_ = sub.add_parser("compare", help="compare runs under one scoring version")
+    cmp_.add_argument("--run", action="append", required=True, help="name=run_dir, in order; repeatable")
     cmp_.add_argument("--out", required=True)
-    cmp_.add_argument("--labels", default="1.1")
-    cmp_.add_argument("--include-proposed", action="store_true")
+    cmp_.add_argument("--labels", default="1.3")
+    cmp_.add_argument("--scoring", default=None)
 
     cal = sub.add_parser("judge-calibrate", help="judge known-correct and known-incorrect answers")
     cal.add_argument("--out", required=True)
@@ -126,8 +125,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "compare":
         from evals import compare
+        from evals.metrics import SCORING_VERSION
 
-        compare.build(Path(args.initial), Path(args.postfix), Path(args.out), args.labels, args.include_proposed)
+        runs = [(spec.split("=", 1)[0], Path(spec.split("=", 1)[1])) for spec in args.run]
+        compare.build(runs, Path(args.out), args.labels, args.scoring or SCORING_VERSION)
         print(f"Comparison: {Path(args.out) / 'comparison.md'}")
         return 0
 
