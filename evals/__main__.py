@@ -49,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     rep.add_argument("--labels", default="1.0", help="label version to score against (1.0 = as approved)")
     rep.add_argument("--include-proposed", action="store_true", help="also apply proposed, unapproved label revisions")
     rep.add_argument("--original-from", default=None, help="take original-mode records from this earlier run")
+    rep.add_argument("--scoring", default=None, help="scoring implementation version (default: latest)")
 
     ver = sub.add_parser("verifier", help="verifier challenge set")
     ver.add_argument("--out", required=True)
@@ -115,8 +116,11 @@ def main(argv: list[str] | None = None) -> int:
         from evals import report
 
         out_dir = Path(args.out) if args.out else Path(args.run_dir)
+        from evals.metrics import SCORING_VERSION
+
         report.build(Path(args.run_dir), out_dir, labels=args.labels, include_proposed=args.include_proposed,
-                     original_from=Path(args.original_from) if args.original_from else None)
+                     original_from=Path(args.original_from) if args.original_from else None,
+                     scoring=args.scoring or SCORING_VERSION)
         print(f"Report: {out_dir / 'report.md'}")
         return 0
 

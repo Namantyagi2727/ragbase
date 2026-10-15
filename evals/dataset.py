@@ -23,7 +23,7 @@ CORPUS_DIR = EVALS / "corpus"
 TABULAR_DIR = EVALS / "tabular"
 CASES_FILE = EVALS / "cases.jsonl"
 REVISIONS_FILE = EVALS / "label_revisions.jsonl"
-LABEL_VERSIONS = ("1.0", "1.1")
+LABEL_VERSIONS = ("1.0", "1.1", "1.2", "1.3")
 VERIFIER_FILE = EVALS / "verifier_cases.jsonl"
 TABULAR_FILE = EVALS / "tabular_cases.jsonl"
 
@@ -67,6 +67,15 @@ class ForbiddenFact(BaseModel):
     pattern: str
 
 
+class ComparisonSpec(BaseModel):
+    """An explicit old -> new change stated by the reference (labels 1.3+)."""
+
+    model_config = ConfigDict(extra="forbid")
+    old: str
+    new: str
+    direction: Literal["increase", "decrease"]
+
+
 class Case(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
@@ -77,6 +86,7 @@ class Case(BaseModel):
     forbidden_facts: list[ForbiddenFact] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
     reference_answer: str
+    comparison: Optional[ComparisonSpec] = None
     required: bool = False
     tags: list[str] = Field(default_factory=list)
     review_status: ReviewStatus = "proposed"
@@ -170,11 +180,12 @@ class LabelRevision(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: str
     case_id: str
-    kind: Literal["forbidden_pattern", "optional_fact", "keywords"]
+    kind: Literal["forbidden_pattern", "optional_fact", "keywords", "comparison"]
     review_status: ReviewStatus
     rationale: str
     forbidden_facts: Optional[list[ForbiddenFact]] = None
     fact_updates: dict[str, dict] = Field(default_factory=dict)
+    comparison: Optional[ComparisonSpec] = None
 
 
 def load_revisions(path: Path = REVISIONS_FILE) -> list[LabelRevision]:
@@ -192,6 +203,8 @@ def apply_revisions(cases: list[Case], revisions: list[LabelRevision], version: 
         data = case.model_dump()
         if rev.forbidden_facts is not None:
             data["forbidden_facts"] = [f.model_dump() for f in rev.forbidden_facts]
+        if rev.comparison is not None:
+            data["comparison"] = rev.comparison.model_dump()
         facts = {f["id"]: f for f in data["expected_facts"]}
         for fact_id, update in rev.fact_updates.items():
             facts[fact_id].update(update)

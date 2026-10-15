@@ -25,12 +25,17 @@ import statistics
 from collections import Counter, defaultdict
 from typing import Iterable
 
-from citations import CITE_RE, is_absence_statement, is_abstention
+from citations import CITE_RE, is_absence_statement, is_abstention, is_full_abstention
 from evals.dataset import Case, normalize
 
-# Scoring implementation version. 1.1 adds optional expected facts; with labels
-# 1.0 (every fact required) it reproduces the 1.0 scores exactly.
-SCORING_VERSION = "1.1"
+# Scoring implementation versions (each reproduces the previous one's scores
+# when its new inputs are absent):
+#   1.1  optional expected facts; with labels 1.0 it reproduces 1.0 exactly.
+#   1.2  abstention re-derived from the answer text with the clause-level
+#        classifier (citations.is_full_abstention), and a comparison-consistency
+#        check for cases whose labels (1.3+) state an explicit old -> new change.
+SCORING_VERSION = "1.2"
+SCORING_VERSIONS = ("1.1", "1.2")
 
 NEGATION_CUE = re.compile(
     r"\b(not|no|never|cannot|can't|isn't|aren't|doesn't|don't|didn't|won't|wasn't|weren't|"
@@ -76,6 +81,53 @@ def forbidden_hits(patterns: Iterable[tuple[str, str]], answer: str) -> list[str
                 hits.append(statement)
                 break
     return hits
+
+
+_NUMBER_WORDS = {w: str(i) for i, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve".split())}
+_NUM = r"(\d+(?:\.\d+)?|" + "|".join(_NUMBER_WORDS) + r")"
+_UNIT = r"(?:\s*(?:dollars?|cents?|hours?|days?|weeks?|percent|%)(?:\s+(?:per|a)\s+\w+)?)?"
+_PAIR_RE = re.compile(rf"\bfrom\s+\$?{_NUM}(?:-hour)?{_UNIT}\s+to\s+\$?{_NUM}\b")
+_PAIR_NEGATED_RE = re.compile(r"\b(not|never|rather than|instead of)\b[^.]{0,12}$")
+_WRONG_DIRECTION = {
+    "increase": re.compile(r"\b(decreas|reduc|lower|cut|drop|fell|shorten)\w*", re.I),
+    "decrease": re.compile(r"\b(increas|rais|rose|rise|higher|extend|lengthen)\w*", re.I),
+}
+
+
+def _canon(token: str) -> str:
+    t = _NUMBER_WORDS.get(token, token)
+    return t[:-2] if t.endswith(".0") else t
+
+
+def comparison_inconsistencies(spec, answer: str) -> list[str]:
+    """Deterministic consistency check against an explicit old -> new change.
+
+    Flags "from A to B" statements that pair the reference figures wrongly
+    (old to a different value, a different value to new) or reverse them, and
+    non-negated sentences that mention a reference figure with a verb of the
+    opposite direction. A narrow check: passing it does not establish that the
+    answer is semantically correct.
+    """
+    old, new = _canon(spec.old), _canon(spec.new)
+    problems = []
+    for sentence in sentences(answer):
+        clean = normalize(CITE_RE.sub(" ", sentence))
+        for match in _PAIR_RE.finditer(clean):
+            if _PAIR_NEGATED_RE.search(clean[: match.start()]):
+                continue
+            a, b = _canon(match.group(1)), _canon(match.group(2))
+            if (a, b) == (new, old):
+                problems.append(f"reversed: from {a} to {b}")
+            elif a == old and b != new:
+                problems.append(f"wrong new value: from {a} to {b}")
+            elif b == new and a != old and a not in (old, new):
+                problems.append(f"wrong old value: from {a} to {b}")
+        numbers = {_canon(t) for t in re.findall(rf"(?<![\w.]){_NUM}(?![\w])", CITE_RE.sub(" ", clean))}
+        mentions = bool(numbers & {old, new})
+        if mentions and not NEGATION_CUE.search(clean) and _WRONG_DIRECTION[spec.direction].search(clean):
+            problems.append(f"opposite direction stated (expected {spec.direction})")
+    return problems
 
 
 def acknowledges_missing(answer: str) -> bool:
@@ -134,7 +186,8 @@ def citation_relevance(case: Case, cited: list[Item]) -> dict:
             "fact_evidence_cited": sum(facts_cited) / len(facts_cited)}
 
 
-def score_record(case: Case, record: dict, shared_ranked: list[Item], k: int) -> dict:
+def score_record(case: Case, record: dict, shared_ranked: list[Item], k: int,
+                 scoring: str = SCORING_VERSION) -> dict:
     """All deterministic metrics for one answer.
 
     shared_ranked: the corrected retriever's top-k for the question (the same
@@ -146,17 +199,22 @@ def score_record(case: Case, record: dict, shared_ranked: list[Item], k: int) ->
     items = [{"source": e.get("source"), "text": e.get("text") or ""} for e in evidence]
     cited_ids = set(record.get("cited_ids") or [])
     cited = [{"source": e.get("source"), "text": e.get("text") or ""} for e in evidence if e.get("eid") in cited_ids]
-    abstained = bool(record.get("abstained"))
+    if scoring == "1.1":
+        abstained = bool(record.get("abstained"))
+    else:
+        abstained = is_full_abstention(answer, cited=bool(record.get("cited_ids")))
 
     coverage = [fact_covered(f.keywords, answer) for f in case.expected_facts]
     required_ok = all(cov for cov, f in zip(coverage, case.expected_facts, strict=True) if f.required)
     wrong = forbidden_hits([(f.statement, f.pattern) for f in case.forbidden_facts], answer)
+    inconsistent = (comparison_inconsistencies(case.comparison, answer)
+                    if scoring != "1.1" and case.comparison is not None else [])
     if record.get("error"):
         correct = False
     elif case.answerable == "yes":
-        correct = required_ok and not wrong and not abstained
+        correct = required_ok and not wrong and not inconsistent and not abstained
     elif case.answerable == "partial":
-        correct = required_ok and acknowledges_missing(answer) and not wrong
+        correct = required_ok and acknowledges_missing(answer) and not wrong and not inconsistent
     else:
         correct = (abstained or acknowledges_missing(answer)) and not wrong
 
@@ -165,6 +223,7 @@ def score_record(case: Case, record: dict, shared_ranked: list[Item], k: int) ->
         "keyword_correct": correct,
         "facts_covered": sum(coverage), "facts_total": len(coverage),
         "forbidden_hits": wrong,
+        "comparison_inconsistencies": inconsistent,
         "abstained": abstained,
         "correct_abstention": abstained if case.answerable == "no" else None,
         "false_abstention": abstained if case.answerable == "yes" else None,

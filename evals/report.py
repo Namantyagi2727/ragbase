@@ -28,7 +28,7 @@ def _fixed_retrieval(run_dir: Path) -> dict:
 
 
 def load_rows(run_dir: Path, labels: str = "1.0", include_proposed: bool = False,
-              original_from: Path | None = None) -> tuple[dict, list[dict]]:
+              original_from: Path | None = None, scoring: str = m.SCORING_VERSION) -> tuple[dict, list[dict]]:
     """Score a run's records. Reads only; nothing in run_dir is modified.
 
     original_from: take the original-mode records from another run (e.g. the
@@ -51,10 +51,10 @@ def load_rows(run_dir: Path, labels: str = "1.0", include_proposed: bool = False
             if rec["mode"] == "original":
                 rec["abstained"] = is_abstention(rec.get("answer") or "")
                 rec["free_form_references"] = len(_NON_EVIDENCE_RE.findall(rec.get("answer") or ""))
-            scores = m.score_record(case, rec, fixed.get(case.id, []), k)
+            scores = m.score_record(case, rec, fixed.get(case.id, []), k, scoring=scoring)
             rows.append({**rec, **scores, "answerable": case.answerable, "required": case.required})
     meta = {**meta, "scoring": {"labels": labels, "include_proposed_revisions": include_proposed,
-                                "scoring_version": m.SCORING_VERSION,
+                                "scoring_version": scoring,
                                 "original_from": str(original_from) if original_from else None}}
     return meta, rows
 
@@ -68,9 +68,9 @@ def _fmt(v) -> str:
 
 
 def build(run_dir: Path, out_dir: Path | None = None, labels: str = "1.0", include_proposed: bool = False,
-          original_from: Path | None = None) -> dict:
+          original_from: Path | None = None, scoring: str = m.SCORING_VERSION) -> dict:
     """Score run_dir and write the report to out_dir (default: run_dir itself)."""
-    meta, rows = load_rows(run_dir, labels, include_proposed, original_from)
+    meta, rows = load_rows(run_dir, labels, include_proposed, original_from, scoring)
     out_dir = Path(out_dir) if out_dir else run_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     modes = [mo for mo in MODES if any(r["mode"] == mo for r in rows)]
@@ -110,7 +110,7 @@ def build(run_dir: Path, out_dir: Path | None = None, labels: str = "1.0", inclu
 def _write(run_dir: Path, out: dict, rows: list[dict], modes: list[str], categories: list[str],
            supplementary_from: Path | None = None) -> None:
     keep = ["mode", "repeat", "case_id", "category", "answerable", "required", "keyword_correct", "facts_covered",
-            "facts_total", "forbidden_hits", "abstained", "citation_ids_valid", "citation_coverage", "cited_precision",
+            "facts_total", "forbidden_hits", "comparison_inconsistencies", "abstained", "citation_ids_valid", "citation_coverage", "cited_precision",
             "fact_evidence_cited", "shared_recall_at_k", "mode_hit_at_k", "mode_recall_at_k", "pool_recall", "pool_size",
             "numeric_mismatches",
             "route", "planner_fallback", "status", "revision_count", "llm_calls", "retrieval_calls", "prompt_tokens",
