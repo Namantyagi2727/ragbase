@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
@@ -47,7 +49,7 @@ def app(monkeypatch, tmp_path):
     monkeypatch.setattr(local_app, "get_chat_model", lambda **kw: model)
     monkeypatch.setattr(local_app.uploads, "ROOT", tmp_path / "sessions")
     monkeypatch.delenv("PRISM_API_KEY", raising=False)
-    at = AppTest.from_file("app.py", default_timeout=30)
+    at = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"), default_timeout=30)
     at.session_state["index_built"] = True
     at.session_state["index_source"] = "session"
     at.session_state["docs_dir"] = str(tmp_path)
