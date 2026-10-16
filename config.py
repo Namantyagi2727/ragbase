@@ -91,6 +91,11 @@ ROW_CHUNK_SIZE: int = 100    # rows per block for CSV/Excel
 # operations only — model output is never executed as code.
 TABULAR_QA_ENABLED: bool = _env_bool("RAGBASE_TABULAR_QA", True)
 
+# Public showcase [RAGBASE_PUBLIC_SHOWCASE]: read-only demo with the curated
+# synthetic corpus and recorded runs; no uploads, no live generation. Enforced
+# in code (ui/showcase.py never imports the ingestion or inference modules).
+PUBLIC_SHOWCASE: bool = _env_bool("RAGBASE_PUBLIC_SHOWCASE", False)
+
 # Storage paths (gitignored)
 INDEX_DIR: str = _env_str("RAGBASE_INDEX_DIR", "./ragbase_index")   # FAISS + TF-IDF artifacts
 DOCS_DIR: str = _env_str("RAGBASE_DOCS_DIR", "./uploaded_docs")     # staging area for uploads
@@ -98,6 +103,7 @@ DOCS_DIR: str = _env_str("RAGBASE_DOCS_DIR", "./uploaded_docs")     # staging ar
 # Upload / ingestion limits (resource-exhaustion guards)
 MAX_UPLOAD_MB: int = _env_int("RAGBASE_MAX_UPLOAD_MB", 50)
 MAX_UPLOAD_FILES: int = _env_int("RAGBASE_MAX_UPLOAD_FILES", 50)   # per upload in the UI
+MAX_QUESTION_CHARS: int = _env_int("RAGBASE_MAX_QUESTION_CHARS", 2000)  # bounds prompt size per question
 MAX_PDF_PAGES: int = _env_int("RAGBASE_MAX_PDF_PAGES", 500)
 MAX_OCR_PAGES: int = _env_int("RAGBASE_MAX_OCR_PAGES", 50)
 MAX_IMAGE_PIXELS: int = 50_000_000

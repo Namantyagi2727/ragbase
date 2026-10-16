@@ -2,8 +2,16 @@ name: Live evaluation (manual)
 
 # Genuine model inference on a GitHub-hosted CPU runner (free for public
 # repositories). Manually triggered only; bounded subset; no secrets, no paid
-# APIs, no LLM judge. Results are uploaded as an artifact and labelled
-# "development" — they are not official benchmark results.
+# APIs, no LLM judge. Results are labelled "development" — they are not
+# official benchmark results and do not replace the full local benchmark.
+#
+# Public visibility (this repository is public):
+#   - The job summary shows only status, configuration and runtime; it does not
+#     publish benchmark scores.
+#   - The uploaded artifact (records, scored rows, report with keyword-proxy
+#     metrics, config, timing and Ollama log) can be downloaded by any signed-in
+#     GitHub user for the retention period below. It contains answers to the
+#     synthetic benchmark questions and no secrets.
 
 on:
   workflow_dispatch:
@@ -11,6 +19,9 @@ on:
       tags:
         description: "Case tags to run"
         default: "ci_subset"
+      cases:
+        description: "Case IDs instead of tags (comma-separated; for quick checks)"
+        default: ""
       modes:
         description: "Modes (standard,agentic)"
         default: "standard,agentic"
@@ -28,13 +39,17 @@ on:
 permissions:
   contents: read
 
+env:
+  LABELS: "1.3"     # approved label version
+  SCORING: "1.2"    # scoring implementation version
+
 jobs:
   live-eval:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -46,47 +61,86 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Cache Hugging Face models
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface
           key: hf-minilm-msmarco-v1
       - name: Install Ollama (official installer)
         run: curl -fsSL https://ollama.com/install.sh | sh
       - name: Cache Ollama models
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.ollama/models
           key: ollama-${{ inputs.model }}
-      - name: Start Ollama and pull the model
+      - name: Start Ollama (only if the installer did not) and pull the model
         run: |
-          ollama serve > ollama.log 2>&1 &
-          for i in $(seq 1 30); do curl -sf localhost:11434/api/version && break; sleep 2; done
+          if curl -sf localhost:11434/api/version > /dev/null; then
+            echo "Ollama is already running (started by the installer's service)"
+          else
+            ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+            for i in $(seq 1 30); do curl -sf localhost:11434/api/version > /dev/null && break; sleep 2; done
+          fi
+          curl -sf localhost:11434/api/version
           ollama pull "${{ inputs.model }}"
           ollama --version
       - name: Run evaluation subset
+        env:
+          OUT: ${{ runner.temp }}/eval-out    # outside the checkout: no untracked files in the repository
         run: |
-          /usr/bin/time -v python -m evals run --out eval-out --label development \
-            --tags "${{ inputs.tags }}" --modes "${{ inputs.modes }}" \
-            --repeats "${{ inputs.repeats }}" --model "${{ inputs.model }}" 2> time.log
-          grep -E "Elapsed|Maximum resident" time.log || true
+          if [ -n "${{ inputs.cases }}" ]; then SELECT="--cases ${{ inputs.cases }}"; else SELECT="--tags ${{ inputs.tags }}"; fi
+          /usr/bin/time -v python -m evals run --out "$OUT" --label development $SELECT \
+            --modes "${{ inputs.modes }}" --repeats "${{ inputs.repeats }}" --model "${{ inputs.model }}" \
+            --labels "$LABELS" --scoring "$SCORING" 2> "$RUNNER_TEMP/time.log"
+          grep -E "Elapsed|Maximum resident" "$RUNNER_TEMP/time.log" || true
       - name: Verifier challenge set
         if: ${{ inputs.run_verifier_challenge }}
-        run: python -m evals verifier --out eval-out/verifier.json --model "${{ inputs.model }}"
-      - name: Job summary
+        run: python -m evals verifier --out "$RUNNER_TEMP/eval-out/verifier.json" --model "${{ inputs.model }}"
+      - name: Job summary (status, configuration and runtime only)
         if: always()
         run: |
-          echo "## Live evaluation (CPU runner, development subset)" >> "$GITHUB_STEP_SUMMARY"
-          grep -E "Elapsed|Maximum resident" time.log >> "$GITHUB_STEP_SUMMARY" || true
-          [ -f eval-out/report.md ] && cat eval-out/report.md >> "$GITHUB_STEP_SUMMARY" || true
+          OUT="$RUNNER_TEMP/eval-out"
+          {
+            echo "## Live evaluation (CPU runner, development subset)"
+            echo ""
+            echo "Not an official benchmark result. Scores are in the run artifact, not in this summary."
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Status | ${{ job.status }} |"
+            echo "| Selection | ${{ inputs.cases || inputs.tags }} |"
+            echo "| Modes / repeats | ${{ inputs.modes }} / ${{ inputs.repeats }} |"
+            echo "| Model | ${{ inputs.model }} |"
+            echo "| Labels / scoring | $LABELS / $SCORING |"
+            if [ -f "$OUT/config.json" ]; then
+              python - "$OUT" <<'PY'
+          import json, pathlib, sys
+          out = pathlib.Path(sys.argv[1])
+          c = json.loads((out / "config.json").read_text())
+          env = c["environment"]
+          records = [json.loads(l) for l in (out / "records.jsonl").read_text().splitlines()] if (out / "records.jsonl").exists() else []
+          rows = [("Commit", env.get("git_commit")), ("Untracked files", len(env.get("untracked_files") or [])),
+                  ("Ollama", env.get("ollama_version")), ("Model digests", env.get("model_digests")),
+                  ("Records", len(records)), ("Errors", sum(1 for r in records if r.get("error"))),
+                  ("Run time (s)", (c.get("runtime") or [{}])[-1].get("seconds"))]
+          for k, v in rows:
+              print(f"| {k} | {v} |")
+          PY
+            fi
+            grep -E "Elapsed|Maximum resident" "$RUNNER_TEMP/time.log" | sed 's/^\s*/| /; s/: /| /; s/$/ |/' || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Collect the Ollama service log
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/ollama.log" ] || journalctl -u ollama --no-pager > "$RUNNER_TEMP/ollama.log" 2>&1 || true
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: live-eval-${{ github.run_id }}
           path: |
-            eval-out
-            !eval-out/index
-            !eval-out/original_*
-            ollama.log
-            time.log
+            ${{ runner.temp }}/eval-out
+            !${{ runner.temp }}/eval-out/index
+            ${{ runner.temp }}/ollama.log
+            ${{ runner.temp }}/time.log
+          if-no-files-found: warn
           retention-days: 30

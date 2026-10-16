@@ -563,6 +563,42 @@ the pre-fix baseline and were not overwritten.
 - Known limitations are listed in `docs/EVALUATION_CHANGELOG.md`. Standard
   RAG still outperforms Agentic RAG overall on the reviewed benchmark.
 
+## Phase 4 — Streamlit UI and public showcase (in progress)
+
+Decisions (approved): Streamlit Community Cloud as the first target for a
+read-only public showcase with curated synthetic documents and genuinely
+recorded runs; a fully functional local application with live Ollama and
+optional Prism; no deployment without separate approval.
+
+Checklist:
+
+- [x] CI cleanup: provenance, duplicate Ollama server, explicit label/scoring
+      versions, no scores in the public job summary, public artifact
+      documented, actions updated to Node 24 versions
+- [x] UI refactor preserving the Neural Terminal identity (stylesheet moved
+      unchanged to `ui/theme.css`; `app.py` is a thin entry point)
+- [x] Standard / Agentic mode selector with execution summaries
+- [x] Citation and source inspection (cited vs retrieved-but-uncited, escaped)
+- [x] Session-isolated uploads (local mode); provider and privacy panel
+- [x] Methodology and evaluation section (no numbers)
+- [x] Tests (scripted models, AppTest) and live local UI checks with Ollama — Checkpoint A
+- [x] Public showcase mode with recorded executions and code-level restrictions
+- [x] Resource profiling, pinned deployment dependencies, local preview — Checkpoint B
+- [ ] Deployment (needs separate approval; upload-size decision in `docs/DEPLOYMENT.md`)
+
+Notes:
+
+- Live checks: Standard and Agentic answers through real Ollama in the local
+  app (comparison question: documents searched were the two travel policies;
+  the verifier flagged figures whose citations pointed at the wrong passage).
+- Model answers are now rendered as escaped text rather than Markdown, so an
+  injected document cannot make the browser fetch remote images.
+- Streamlit's upload endpoint accepts files for any active session even
+  without an upload widget; the showcase never reads them, and the size cap
+  is a deployment decision.
+- Showcase runs were recorded at commit `1aef28a` (`llama3.2:3b`, seed 1001)
+  and are stored as generated; curator notes are separate.
+
 ## Carried forward to later phases
 
 ### Required evaluation regression cases (Phase 3)

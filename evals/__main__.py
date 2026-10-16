@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 
 import config
+from evals.dataset import LABEL_VERSIONS
+from evals.metrics import SCORING_VERSIONS
 
 
 def _csv(value: str) -> list[str]:
@@ -42,14 +44,20 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--seed", type=int, default=1000, help="base seed; repeat i uses seed+i")
     run.add_argument("--no-rerank", action="store_true")
     run.add_argument("--model", default=config.OLLAMA_MODEL)
+    run.add_argument("--labels", default="1.0", choices=LABEL_VERSIONS,
+                     help="label version for the report written after the run")
+    run.add_argument("--scoring", default=None, choices=SCORING_VERSIONS,
+                     help="scoring version for that report (default: latest)")
 
     rep = sub.add_parser("report", help="score a run and write report.md / summary.csv")
     rep.add_argument("run_dir")
     rep.add_argument("--out", default=None, help="write the report here instead of into run_dir")
-    rep.add_argument("--labels", default="1.0", help="label version to score against (1.0 = as approved)")
+    rep.add_argument("--labels", default="1.0", choices=LABEL_VERSIONS,
+                     help="label version to score against (1.0 = as approved)")
     rep.add_argument("--include-proposed", action="store_true", help="also apply proposed, unapproved label revisions")
     rep.add_argument("--original-from", default=None, help="take original-mode records from this earlier run")
-    rep.add_argument("--scoring", default=None, help="scoring implementation version (default: latest)")
+    rep.add_argument("--scoring", default=None, choices=SCORING_VERSIONS,
+                     help="scoring implementation version (default: latest)")
 
     ver = sub.add_parser("verifier", help="verifier challenge set")
     ver.add_argument("--out", required=True)
@@ -75,8 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     cmp_ = sub.add_parser("compare", help="compare runs under one scoring version")
     cmp_.add_argument("--run", action="append", required=True, help="name=run_dir, in order; repeatable")
     cmp_.add_argument("--out", required=True)
-    cmp_.add_argument("--labels", default="1.3")
-    cmp_.add_argument("--scoring", default=None)
+    cmp_.add_argument("--labels", default="1.3", choices=LABEL_VERSIONS)
+    cmp_.add_argument("--scoring", default=None, choices=SCORING_VERSIONS)
 
     cal = sub.add_parser("judge-calibrate", help="judge known-correct and known-incorrect answers")
     cal.add_argument("--out", required=True)
@@ -106,8 +114,9 @@ def main(argv: list[str] | None = None) -> int:
             return 3
         runner.run(cfg)
         from evals import report
+        from evals.metrics import SCORING_VERSION
 
-        report.build(Path(args.out))
+        report.build(Path(args.out), labels=args.labels, scoring=args.scoring or SCORING_VERSION)
         print(f"Report: {Path(args.out) / 'report.md'}")
         return 0
 
