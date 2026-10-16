@@ -761,5 +761,9 @@ hr {
    HIDE STREAMLIT CHROME
    ================================================================ */
 #MainMenu, footer, header { visibility: hidden; }
+/* Newer Streamlit puts the "open sidebar" control inside the header; keep it usable
+   (otherwise a collapsed sidebar, the default on phones, could not be reopened). */
+[data-testid="stExpandSidebarButton"],
+[data-testid="collapsedControl"] { visibility: visible; }
 [data-testid="stDecoration"] { display: none; }
 

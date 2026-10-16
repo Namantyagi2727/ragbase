@@ -8,7 +8,7 @@ RAGBase has two experiences, built from the same UI components and styling.
 | Inference | Live: Ollama by default; Prism when configured | None. Recorded runs only |
 | Documents | Uploads indexed in a per-session workspace; an existing local index is loaded read-only | The curated synthetic corpus, read-only |
 | Inputs | Chat, uploads, settings | Selection of curated questions and documents only — no text input |
-| Dependencies | `requirements.txt` (PyTorch, embedding and reranker models, FAISS, LangChain, LangGraph) | `showcase/requirements.txt` (Streamlit only, pinned) |
+| Dependencies | `requirements.txt` (PyTorch, embedding and reranker models, FAISS, LangChain, LangGraph) | `showcase/requirements.txt` (Streamlit 1.66.0 only, pinned) |
 
 **Nothing is deployed.** Deployment needs separate approval.
 
@@ -16,7 +16,7 @@ RAGBase has two experiences, built from the same UI components and styling.
 
 | Setting | Value |
 |---|---|
-| Repository / branch | `Namantyagi2727/ragbase`, `main` after the Phase 4 PR is merged (see *Upload size* below for a deployment-branch alternative) |
+| Repository / branch | `Namantyagi2727/ragbase`, branch `showcase-deploy` (main plus `maxUploadSize = 1` in the root config; see *Upload size*) |
 | Main file path | `showcase/streamlit_app.py` |
 | Python | 3.12 (the version the lock was generated for) |
 | Dependencies | `showcase/requirements.txt` — a dependency file next to the entry point takes precedence over the root `requirements.txt`, so the heavy local stack is not installed |
@@ -30,17 +30,20 @@ a wake-up page; any visitor can wake it, and the cold start then repeats.
 
 ## Resource measurements
 
-Measured on 2026-10-16 on an Apple Silicon Mac (Python 3.12, Streamlit
-1.37.1). Linux x86-64 figures will differ somewhat; the ratios are the point.
+Measured on 2026-10-16 on an Apple Silicon Mac (Python 3.12). Showcase
+figures were first taken with Streamlit 1.37.1 and repeated after the update
+to the deployed version, 1.66.0. Linux x86-64 figures will differ somewhat;
+the ratios are the point.
 
 | Measurement | Public showcase (playback) | Full local stack |
 |---|---|---|
-| Clean dependency install (uv, empty cache) | 2.1 s | 7.3 s |
-| Installed environment size | 299 MB | 1.2 GB (Linux default PyTorch wheels with CUDA are several GB larger) |
-| Server start to healthy | 1.0 s | — |
-| Process memory, idle | 87 MB | — |
+| Clean dependency install (uv, empty cache) | 2.1 s (1.37.1); 1.7 s (1.66.0) | 7.3 s |
+| Installed environment size | 299 MB (1.37.1); 297 MB (1.66.0) | 1.2 GB (Linux default PyTorch wheels with CUDA are several GB larger) |
+| Server start to healthy | 1.0 s (1.37.1); 0.75–1.1 s (1.66.0) | — |
+| Process memory, idle | 87 MB (1.37.1); 79 MB (1.66.0) | — |
 | Process memory, 1 session | 107 MB | — |
-| Process memory, 5 concurrent sessions, each switching questions | 107 MB, 0.3 % CPU | — |
+| Process memory, 5 concurrent sessions, each switching questions | 107 MB, 0.3 % CPU (1.37.1) | — |
+| Process memory after desktop and mobile sessions and upload probes | 83–103 MB (1.66.0) | — |
 | Hybrid retrieval in-process (measured, **not enabled**) | +3.9 s import, ~620 MB peak, index build 1.3 s, query p50 31 ms | same stack |
 
 The recorded data (about 125 KB of JSON) is cached once and shared, so extra
@@ -88,13 +91,35 @@ multi-document answer).
 | Configuration and keys | No secrets required or read | `PRISM_API_KEY` read from the environment only, never displayed or logged; Prism controls appear only when it is set |
 | Telemetry | Streamlit usage statistics disabled | Same |
 
-### Upload size (decision needed before deployment)
+### Upload size (decided: deployment branch)
 
-The root `.streamlit/config.toml` sets `maxUploadSize = 50` for local uploads,
-and Community Cloud reads only the root config. Options:
+The root `.streamlit/config.toml` on `main` sets `maxUploadSize = 50` for
+local uploads, and Community Cloud reads only the root config. The showcase
+is therefore deployed from `showcase-deploy`, whose only difference is
+`maxUploadSize = 1`.
 
-1. Deploy from a dedicated branch whose only difference is a stricter root
-   config (`maxUploadSize = 1`). Recommended: the showcase cannot use uploads
-   anyway, and this caps memory abuse of the upload endpoint.
-2. Deploy from `main` and accept the residual risk (bounded by the platform's
-   memory limit; an abused app restarts).
+This is a cap, not a prohibition. Verified on Streamlit 1.66.0 with the cap
+set to 1 MB, using a real browser session (websocket session id plus XSRF
+token):
+
+| Request | Result |
+|---|---|
+| Upload without the XSRF token | 403 |
+| Upload with an invalid session id | 400 |
+| 0.1 MB and 0.9 MB under a real session | 204 — accepted into that session's memory |
+| 1.2 MB and 5 MB under a real session | 413 — rejected while streaming, before buffering |
+
+Accepted files are held in memory for that session and never read, indexed
+or written to disk by the showcase, which has no upload widget and no code
+that retrieves uploaded files. Residual risk: a client can hold up to about
+1 MB per upload request in server memory for the life of its session, bounded
+in total by the platform's memory limit (an exhausted app restarts).
+
+### Preflight fixes made for Streamlit 1.66
+
+- The theme hides Streamlit's header; in 1.66 the control that reopens a
+  collapsed sidebar sits inside it, so a collapsed sidebar could not be
+  reopened. The control is now kept visible.
+- The showcase sidebar starts collapsed on phones (`initial_sidebar_state =
+  "auto"`), and the recorded-runs disclosure plus a hint on choosing
+  questions now also appear on the main page.

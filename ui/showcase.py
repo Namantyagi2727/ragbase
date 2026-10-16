@@ -134,6 +134,10 @@ def main() -> None:
         &nbsp;·&nbsp; citations, verification and execution traces
     </div>
     """, unsafe_allow_html=True)
+    st.markdown('<div class="rb-notice" style="margin-top:0.6rem"><b>Recorded runs — no live inference.</b> '
+                "Every answer was generated earlier by RAGBase running locally; provenance is shown with each run. "
+                "This page cannot answer new questions or accept documents. Choose one of ten curated questions in the "
+                "sidebar (tap » on a phone).</div>", unsafe_allow_html=True)
     st.divider()
     tab_compare, tab_docs, tab_method = st.tabs(["Compare answers", "Source documents", "Methodology & evaluation"])
     with tab_compare:
