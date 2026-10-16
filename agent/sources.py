@@ -70,6 +70,14 @@ def named_sources(question: str, documents: list[str]) -> list[str]:
     return sorted(named, key=first_mention)
 
 
+METHOD_TEXT = {
+    "named": "named in the question",
+    "named+relevance": "named in the question, plus a relevance search",
+    "relevance": "relevance search",
+    "reused": "reused from the first round",
+}
+
+
 @dataclass
 class SourceSelection:
     method: str                                   # "named" | "named+relevance" | "relevance"

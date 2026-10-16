@@ -21,7 +21,7 @@ from agent.prompts import (
     verifier_messages,
 )
 from agent.schemas import AbstentionCheck, QueryPlan, VerifierOutput
-from agent.sources import SourceSelection, select_compare_sources
+from agent.sources import METHOD_TEXT, SourceSelection, select_compare_sources
 from agent.state import AgentState, TraceEvent
 from agent.tools import RetrievalTools, ToolError
 from agent.verifier import assess, assess_abstention, revision_feedback
@@ -310,7 +310,8 @@ class AgentNodes:
         calls = len(searches) + (selection.retrieval_calls if selection else 0)
         summary = f"Ran {len(searches)} search(es); {len(added)} new passage(s), {len(existing) + len(added)} total"
         if selection is not None:
-            summary = (f"Selected {len(selection.selected)} document(s) by {selection.method} for comparison; "
+            how = METHOD_TEXT.get(selection.method, selection.method)
+            summary = (f"Compared {len(selection.selected)} document(s) ({how}); "
                        + summary[0].lower() + summary[1:])
         data = {"searches": log, "added": [e.eid for e in added]}
         if selection is not None:
