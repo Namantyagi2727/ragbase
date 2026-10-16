@@ -1,0 +1,15 @@
+{
+ "note": "Curated questions from the human-reviewed benchmark. Observations describe the recorded runs and were written after recording; they never change the recorded output.",
+ "questions": [
+  {"case_id": "F01", "title": "A direct policy lookup", "why": "A simple single-fact question both modes should handle."},
+  {"case_id": "V01", "title": "Comparing two policy versions", "why": "Needs evidence from both the 2023 and 2024 travel policies."},
+  {"case_id": "V02", "title": "A rule that changed in two ways", "why": "Both the threshold and the approver changed between versions."},
+  {"case_id": "C02", "title": "Conflicting documents", "why": "A later addendum changes the Handbook only for some employees."},
+  {"case_id": "R01", "title": "The two-column page regression", "why": "The under-21 rule sits next to the over-21 rule on a two-column PDF page; the original code misread it."},
+  {"case_id": "P01", "title": "Partly answerable", "why": "The documents give the match but not the vesting schedule."},
+  {"case_id": "U01", "title": "Not in the documents", "why": "The right behaviour is to decline."},
+  {"case_id": "FP01", "title": "A false premise", "why": "The question assumes a reduction; the allowance actually increased."},
+  {"case_id": "M01", "title": "Combining two documents", "why": "The full answer needs the IT Security Policy and the Remote Work Addendum."},
+  {"case_id": "T02", "title": "A two-step question", "why": "Two conditions from the same addendum must both be applied."}
+ ]
+}
