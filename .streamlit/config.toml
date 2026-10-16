@@ -7,7 +7,10 @@ textColor             = "#c8dfe8"
 font                  = "sans serif"
 
 [server]
-headless = false
+# showcase-deploy branch: must be headless on Community Cloud. With headless =
+# false (main, for local use) Streamlit waits for an interactive email prompt
+# and never starts, so the platform health check fails.
+headless = true
 
 # showcase-deploy branch: the public showcase has no upload widget and never
 # reads uploads; this caps what Streamlit's upload endpoint will accept into
