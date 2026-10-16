@@ -563,6 +563,27 @@ the pre-fix baseline and were not overwritten.
 - Known limitations are listed in `docs/EVALUATION_CHANGELOG.md`. Standard
   RAG still outperforms Agentic RAG overall on the reviewed benchmark.
 
+## Phase 4 — Streamlit UI and public showcase (in progress)
+
+Decisions (approved): Streamlit Community Cloud as the first target for a
+read-only public showcase with curated synthetic documents and genuinely
+recorded runs; a fully functional local application with live Ollama and
+optional Prism; no deployment without separate approval.
+
+Checklist:
+
+- [x] CI cleanup: provenance, duplicate Ollama server, explicit label/scoring
+      versions, no scores in the public job summary, public artifact
+      documented, actions updated to Node 24 versions
+- [ ] UI refactor preserving the Neural Terminal identity
+- [ ] Standard / Agentic mode selector with execution summaries
+- [ ] Citation and source inspection
+- [ ] Session-isolated uploads (local mode); provider and privacy panel
+- [ ] Methodology and evaluation section (no numbers)
+- [ ] Tests (scripted models) and live local UI checks — Checkpoint A
+- [ ] Public showcase mode with recorded executions and server-side restrictions
+- [ ] Resource profiling, pinned deployment dependencies, local preview — Checkpoint B
+
 ## Carried forward to later phases
 
 ### Required evaluation regression cases (Phase 3)

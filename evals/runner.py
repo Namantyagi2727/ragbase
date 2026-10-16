@@ -69,10 +69,20 @@ def _git(*args: str) -> str:
     return subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True).stdout.strip()
 
 
+def _untracked_outside_results(limit: int = 20) -> list[str]:
+    """Untracked, non-ignored files (outside gitignored result folders), for transparency."""
+    paths = _git("ls-files", "--others", "--exclude-standard").splitlines()
+    return paths[:limit]
+
+
 def environment(cfg: EvalConfig) -> dict:
     env = {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "git_commit": _git("rev-parse", "--short", "HEAD") + ("+uncommitted" if _git("status", "--porcelain") else ""),
+        # "+uncommitted" means tracked files differ from the commit. Untracked files
+        # (e.g. generated outputs) are listed separately rather than marking the commit.
+        "git_commit": _git("rev-parse", "--short", "HEAD")
+        + ("+uncommitted" if _git("status", "--porcelain", "--untracked-files=no") else ""),
+        "untracked_files": _untracked_outside_results(),
         "python": sys.version.split()[0],
         "platform": f"{platform.system()} {platform.release()} {platform.machine()}",
         "processor": platform.processor(),

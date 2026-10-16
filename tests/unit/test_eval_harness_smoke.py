@@ -212,3 +212,30 @@ def test_rubric_v3_only_changes_partial_answer_handling():
     assert v3.startswith(v2.split("- completeness")[0])
     assert "never expect that information to be supplied" in v3 and "never expect" not in v2
     assert judge.RUBRICS["1"][0] == judge.RUBRIC_V1          # earlier rubrics kept for reproducibility
+
+
+def test_untracked_outputs_do_not_mark_the_commit_as_uncommitted(monkeypatch):
+    calls = []
+
+    def fake_git(*args):
+        calls.append(args)
+        if args[:2] == ("rev-parse", "--short"):
+            return "abc1234"
+        if args[0] == "status":
+            assert "--untracked-files=no" in args       # untracked files are not "uncommitted changes"
+            return ""
+        if args[:2] == ("ls-files", "--others"):
+            return "eval-out/records.jsonl"
+        return ""
+
+    monkeypatch.setattr(runner, "_git", fake_git)
+    monkeypatch.setattr(runner.httpx, "get", lambda *a, **k: (_ for _ in ()).throw(runner.httpx.ConnectError("x")))
+    env = runner.environment(runner.EvalConfig(out_dir="x"))
+    assert env["git_commit"] == "abc1234" and env["untracked_files"] == ["eval-out/records.jsonl"]
+
+
+def test_cli_rejects_unknown_label_and_scoring_versions(capsys):
+    with pytest.raises(SystemExit):
+        cli(["run", "--out", "x", "--labels", "9.9"])
+    with pytest.raises(SystemExit):
+        cli(["report", "x", "--scoring", "0.1"])

@@ -79,3 +79,29 @@ The judge is supporting evidence, not ground truth.
   paraphrases and can be satisfied by lucky matches; the judge has passed a
   wrong answer and failed correct ones. Neither is ground truth.
 - Small benchmark (42 cases), one 3B generator model, one machine.
+
+## Live CI subset (`eval-live.yml`)
+
+A manually triggered, development-labelled run of the 15-case `ci_subset`
+(Standard and Agentic, one repeat) on a GitHub-hosted CPU runner. It checks
+that the pipeline runs end to end with real inference; it does not replace the
+full local benchmark and its scores are not official.
+
+- First run on `main` (`8c14708`, run 38792792835): completed, 30 records, no
+  errors; about 8 minutes end to end. Its commit was recorded as
+  `+uncommitted` because outputs were written inside the checkout, and its
+  report used labels 1.0; both fixed afterwards.
+- The workflow now writes outputs to the runner's temporary directory, records
+  untracked files separately from uncommitted changes, starts Ollama only if
+  the installer's service is not already running, and scores with labels 1.3
+  and scoring 1.2.
+
+What is public (the repository is public):
+
+- The job summary shows status, selection, model, label and scoring versions,
+  commit, Ollama version, record and error counts, and runtime. It does not
+  show benchmark scores.
+- The run artifact (records with generated answers to the synthetic
+  questions, scored rows, a report with keyword-proxy metrics, config, timing
+  and the Ollama log) can be downloaded by any signed-in GitHub user for 30
+  days. It contains no secrets and no user data.
