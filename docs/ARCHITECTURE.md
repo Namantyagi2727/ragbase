@@ -17,24 +17,22 @@ Two Streamlit experiences share the same rendering code and stylesheet but
 not the same capabilities.
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph local["Full local app — streamlit run app.py"]
         LA["ui/local_app.py"] --> ING["ingest.py<br/>per-session workspace"]
         LA --> RET["retriever.py<br/>Standard RAG"]
         LA --> AG["agent/<br/>Agentic RAG"]
         LA --> TAB["tabular.py"]
-        RET --> LLM["llm/<br/>Ollama or Prism"]
+        RET --> LLM["llm/ — Ollama or Prism"]
         AG --> LLM
         TAB --> LLM
     end
     subgraph show["Public showcase — showcase/streamlit_app.py"]
-        SC["ui/showcase.py"] --> DATA["showcase/data/*.json<br/>recorded runs, corpus text"]
+        SC["ui/showcase.py"] --> DATA[("showcase/data/*.json<br/>recorded runs, corpus text")]
     end
-    LA --> R["ui/render.py<br/>answers, citations, traces"]
+    LA --> R["ui/render.py — answers, citations, traces"]
     SC --> R
-    REC["scripts/record_showcase.py<br/>(run locally)"] -. writes .-> DATA
-    REC --> RET
-    REC --> AG
+    REC["scripts/record_showcase.py<br/>runs the real pipeline locally"] -. writes .-> DATA
 ```
 
 - The showcase imports no ingestion, retrieval-model, agent, LLM or tabular

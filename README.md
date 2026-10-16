@@ -74,8 +74,8 @@ flowchart LR
     M -->|Agentic| A["LangGraph: plan → retrieve →<br/>write → verify → refine"]
     X --> S
     X --> A
-    S --> O["Answer + citations<br/>+ evidence"]
-    A --> O2["Answer + citations + evidence<br/>+ verification + execution trace"]
+    S --> O["Answer, citations,<br/>evidence"]
+    A --> O2["Answer, citations,<br/>evidence, verification,<br/>execution trace"]
 ```
 
 Detailed diagrams — ingestion, retrieval, the agent graph, verification
