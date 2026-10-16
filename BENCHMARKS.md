@@ -1,13 +1,37 @@
-# RAGBase Benchmarks
+# Historical latency benchmark (October 2026)
+
+> **Historical record.** This page preserves a latency-only benchmark taken
+> on 2026-10-13 (and earlier results from 2026-09-18), **before** the
+> evaluation framework, the agent and the later retrieval and citation work.
+> It measured two code versions that no longer exist on `main`:
+>
+> - **"Original"** — the pre-upgrade code at commit `909df31`.
+> - **"Fixed"** — commit `6872aab` (2026-10-13), the hybrid-retrieval fusion
+>   fix with the first evidence citations.
+>
+> Its figures were measured on a different corpus (1,200 public-domain
+> documents), with different queries and conditions from the Phase 3
+> evaluation, so they must not be combined with or compared directly to the
+> current evaluation results. For answer quality, citations and the
+> Standard vs Agentic comparison, see the
+> [evaluation methodology](README.md#evaluation) and the
+> [evaluation change log](docs/EVALUATION_CHANGELOG.md).
+>
+> The measurements below are unchanged from the original page. Two
+> statements in it are out of date and are corrected inline: citations are
+> now written `[1]`, `[2, 3]` (the `[E#]` form described below was replaced
+> in Phase 2; legacy forms are still normalised), and the evaluation suite is
+> complete rather than "in progress".
 
 Measured ingestion and query latency on a 1,200-document corpus.
 Reproduce with `make_benchmark_corpus.py` + `benchmark.py`; raw results are in
 [`benchmarks/results/`](benchmarks/results/).
 
 These benchmarks measure **speed only**. Retrieval and answer *quality* are
-measured separately by the evaluation suite (in progress).
+measured separately by the evaluation suite (*then in progress; now
+complete — see the README's [Evaluation](README.md#evaluation) section*).
 
-## Current results (2026-10-13)
+## Results (2026-10-13)
 
 Same machine, same corpus, same session: the original retrieval code
 (`main` @ `909df31`) and the fixed hybrid retrieval, two runs each.
@@ -34,6 +58,7 @@ chunk counts for both versions.
    This accounts for the extra ~10–20ms in the reranking row.
 3. **Answers now carry evidence citations.** The standard prompt asks for
    `[E#]` citations tied to retrieved chunks (validated deterministically).
+   *(Correction: the current format is `[1]`, `[2, 3]`; see the note above.)*
    Answers are fuller: in a diagnostic pass over the 15 generation queries,
    output length ranged from 15 to 245 tokens (median 51), and generation
    time tracked output length almost linearly. The higher p95 in the
@@ -85,13 +110,19 @@ chapter"), so abstentions are expected.
 
 ```bash
 python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 pip install reportlab              # only needed to build the synthetic corpus
 ollama pull llama3.2 && ollama serve
 
 python make_benchmark_corpus.py    # builds ./benchmark_corpus (~1,200 files)
 python benchmark.py                # ingests it, times retrieval + generation
 ```
+
+These scripts still run against the current code (checked 2026-10-16), so
+re-running them measures **today's** pipeline, not the historical versions
+above. To reproduce the historical numbers, check out `909df31` or `6872aab`
+first. `make_benchmark_corpus.py` downloads its source texts, so the corpus
+can differ slightly between builds (see "Reading these numbers").
 
 `benchmark_corpus/` and `benchmark_index/` are gitignored and regenerated locally.
 
