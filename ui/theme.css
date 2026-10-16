@@ -722,6 +722,28 @@ hr {
     border-radius: 2px;
 }
 .rb-metric b { color: var(--cyan); font-weight: 500; }
+.rb-question {
+    font-family: var(--font-body);
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--text-bright);
+    margin: 0.2rem 0 0.7rem;
+}
+.rb-answer {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--text-bright);
+    overflow-wrap: anywhere;
+}
+.rb-answer-note {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--amber);
+    border-left: 2px solid var(--amber-border);
+    padding-left: 0.6rem;
+    margin: 0.3rem 0;
+}
 .rb-notice {
     font-family: var(--font-mono);
     font-size: 0.7rem;
