@@ -11,3 +11,7 @@ headless = false
 
 # Keep in sync with RAGBASE_MAX_UPLOAD_MB (config.py); Streamlit enforces this first.
 maxUploadSize = 50
+
+[browser]
+# Do not send Streamlit usage statistics (local app and public showcase).
+gatherUsageStats = false

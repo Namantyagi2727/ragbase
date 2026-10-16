@@ -58,12 +58,14 @@ Documents (PDF / DOCX / TXT / CSV / Excel / Images)
 | | |
 |---|---|
 | **Multi-format ingestion** | PDF (text + OCR fallback), DOCX, TXT, PNG/JPG, CSV, Excel |
-| **Hybrid retrieval** | FAISS semantic search + TF-IDF keyword search, merged and deduplicated |
+| **Two answer modes** | Standard RAG (one search, one model call) or Agentic RAG (a bounded LangGraph workflow that plans searches, checks claims against their citations and may refine) |
+| **Hybrid retrieval** | FAISS semantic search + TF-IDF keyword search, merged with reciprocal-rank fusion |
 | **Cross-encoder reranking** | Optional re-scoring pass with `cross-encoder/ms-marco-MiniLM-L-6-v2` |
-| **Tabular Q&A** | Auto-generates and executes pandas code for numeric questions over CSV/Excel |
-| **Source citations** | Every answer shows which document chunks were used, with location |
+| **Tabular Q&A** | Numeric questions over CSV/Excel answered with allowlisted dataframe operations; model output is never executed as code |
+| **Inspectable citations** | Numbered evidence citations, cited passages separated from retrieved-but-uncited ones, with source and location |
+| **Execution summaries** | Agentic answers show the route, sub-questions, documents searched, verification outcome, model calls and latency — and never claim that a citation proves an answer correct |
 | **Fully configurable** | Embedding model, LLM, chunk size, overlap, top-k, reranking — all from the UI |
-| **Fully offline** | No internet required after setup. Nothing leaves your machine |
+| **Fully offline** | No internet required after setup. With the default Ollama backend nothing leaves your machine; an optional Prism gateway backend is described in [docs/PRISM.md](docs/PRISM.md) |
 
 ---
 
@@ -103,7 +105,15 @@ ollama serve
 streamlit run app.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501), upload your documents, click **Build Index**, then start asking questions.
+Open [http://localhost:8501](http://localhost:8501), upload your documents, click **Build Index**, choose Standard or Agentic RAG, then start asking questions. Uploads are indexed in a temporary workspace for your session.
+
+To preview the read-only public showcase (recorded runs over the synthetic benchmark corpus, no models needed):
+
+```bash
+streamlit run showcase/streamlit_app.py
+```
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the showcase's design, resource measurements and security checklist.
 
 ---
 
@@ -138,14 +148,22 @@ Then select it in the UI and click **Apply & Reload**.
 
 ```
 ragbase/
-├── app.py              # Streamlit UI
-├── ingest.py           # Document loading, OCR, chunking, indexing
-├── retriever.py        # HybridRetriever, reranker, LCEL chain
+├── app.py              # Streamlit entry point (local app or showcase)
+├── ui/                 # UI: local app, showcase, answer views, theme (theme.css), providers, uploads
+├── agent/              # Agentic RAG: LangGraph workflow, source selection, verifier
+├── llm/                # Ollama and Prism clients
+├── ingest.py           # Document loading, OCR, column-aware PDF extraction, chunking, indexing
+├── retriever.py        # HybridRetriever, reranker, Standard RAG chain
+├── citations.py        # Evidence IDs, citation validation, abstention detection
+├── tabular.py          # Allowlisted tabular Q&A
+├── evals/              # Benchmark corpus, reviewed labels, harness, metrics, reports
+├── showcase/           # Public showcase entry point, recorded runs, curated questions
+├── scripts/            # Recording and Prism helper scripts
+├── docs/               # Development log, evaluation change log, Prism, deployment
 ├── config.py           # All settings
 ├── requirements.txt
-├── .streamlit/
-│   └── config.toml     # Dark theme config
-└── .gitignore
+└── .streamlit/
+    └── config.toml     # Dark theme config
 ```
 
 ---
