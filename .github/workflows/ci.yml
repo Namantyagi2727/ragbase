@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install "ruff>=0.6"
+      - run: pip install ruff -c constraints.txt
       - run: ruff check .
 
   test:
@@ -44,7 +44,7 @@ jobs:
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements-dev.txt -c constraints.txt
       - name: Run tests
         run: pytest -m "not integration and not live"
 
@@ -64,7 +64,7 @@ jobs:
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements-dev.txt -c constraints.txt
       - name: Cache Hugging Face models
         uses: actions/cache@v6
         with:
