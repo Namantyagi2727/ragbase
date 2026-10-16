@@ -599,6 +599,29 @@ Notes:
 - Showcase runs were recorded at commit `1aef28a` (`llama3.2:3b`, seed 1001)
   and are stored as generated; curator notes are separate.
 
+## Phase 5 — Documentation, portfolio and reproducibility (planning)
+
+Goal: present RAGBase accurately for GitHub, recruiters and interviews. No
+changes to Prism, the agent, showcase recordings, approved labels or the
+deployment without separate approval. Numerical results are published only
+after the proposed presentation is approved.
+
+Checklist:
+
+- [ ] Audit of README and docs (done in planning; findings in the PR)
+- [ ] Architecture document with Mermaid diagrams drawn from the code
+- [ ] README rewrite (value proposition, recorded-showcase disclosure, real
+      screenshots, features, architecture, install, evaluation and CI
+      overview, security and limitations, navigation)
+- [ ] Refresh screenshots from the deployed showcase and the local app
+- [ ] Public evaluation document — review gate: numbers approved first
+- [ ] Demo walkthrough
+- [ ] Reproducibility: clean-environment install check, pinned constraints
+      for the local stack, accurate badges (including CI), link check
+- [ ] Legacy latency benchmark (`BENCHMARKS.md`, root benchmark scripts)
+      updated or relocated with historical context
+- [ ] Resume, portfolio and LinkedIn text (kept outside the repository)
+
 ## Carried forward to later phases
 
 ### Required evaluation regression cases (Phase 3)
