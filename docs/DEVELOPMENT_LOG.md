@@ -563,7 +563,7 @@ the pre-fix baseline and were not overwritten.
 - Known limitations are listed in `docs/EVALUATION_CHANGELOG.md`. Standard
   RAG still outperforms Agentic RAG overall on the reviewed benchmark.
 
-## Phase 4 — Streamlit UI and public showcase (in progress)
+## Phase 4 — Streamlit UI and public showcase (closed)
 
 Decisions (approved): Streamlit Community Cloud as the first target for a
 read-only public showcase with curated synthetic documents and genuinely
@@ -584,7 +584,7 @@ Checklist:
 - [x] Tests (scripted models, AppTest) and live local UI checks with Ollama — Checkpoint A
 - [x] Public showcase mode with recorded executions and code-level restrictions
 - [x] Resource profiling, pinned deployment dependencies, local preview — Checkpoint B
-- [ ] Deployment (needs separate approval; upload-size decision in `docs/DEPLOYMENT.md`)
+- [x] Deployment: https://ragbase-showcase.streamlit.app/ (approved; details in `docs/DEPLOYMENT.md`)
 
 Notes:
 
@@ -598,6 +598,32 @@ Notes:
   is a deployment decision.
 - Showcase runs were recorded at commit `1aef28a` (`llama3.2:3b`, seed 1001)
   and are stored as generated; curator notes are separate.
+
+### Deployment and closeout
+
+- Merged into `main` as `f5b6d87` (PR #5, merge commit). Deployed to
+  Streamlit Community Cloud from `showcase-deploy`: `main` plus two root
+  config overrides, `maxUploadSize = 1` (`4d293a2`) and `headless = true`
+  (`569162e`).
+- The first deployment failed its health check. The build was correct
+  (showcase dependencies only, Python 3.12.15), but with `main`'s
+  `headless = false` Streamlit waited at its first-run email prompt and never
+  started. Reproduced locally; fixed with the deployment-only `569162e`.
+- Ten live acceptance checks passed as an anonymous visitor (recorded in
+  `docs/DEPLOYMENT.md`): all ten comparisons, citations, traces, documents,
+  methodology, disclosures and provenance, no inputs or uploads, no secrets
+  or private documents, a successful redeploy, desktop and mobile layouts.
+- Not measured: platform memory, CPU and exact cold-start time (owner-only
+  view); not estimated. A live probe of the 1 MB upload cap was
+  inconclusive; the cap was verified locally on the same Streamlit version.
+- Tests at closeout: lint clean; 431 unit tests under Streamlit 1.37.1 and
+  1.66.0; integration 11 passed, 7 skipped (live Prism not configured); CI
+  green on `ui-demo` (`8e6a4b5`) and on `main` (`f5b6d87`).
+- Optional future polish: the agent-trace header is cramped at narrow
+  desktop widths (around 1,100 px).
+- Future approved changes reach the showcase by merging `main` into
+  `showcase-deploy` (merge commit, no rebase or force-push) and keeping the
+  two overrides; see *Updating the deployment* in `docs/DEPLOYMENT.md`.
 
 ## Carried forward to later phases
 

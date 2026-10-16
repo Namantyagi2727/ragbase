@@ -10,15 +10,17 @@ RAGBase has two experiences, built from the same UI components and styling.
 | Inputs | Chat, uploads, settings | Selection of curated questions and documents only — no text input |
 | Dependencies | `requirements.txt` (PyTorch, embedding and reranker models, FAISS, LangChain, LangGraph) | `showcase/requirements.txt` (Streamlit 1.66.0 only, pinned) |
 
-**Nothing is deployed.** Deployment needs separate approval.
+**Live showcase:** https://ragbase-showcase.streamlit.app/ — deployed
+2026-10-16 from branch `showcase-deploy`. Every answer it shows is a
+recorded run; it performs no live inference.
 
-## Intended Streamlit Community Cloud configuration
+## Streamlit Community Cloud configuration (as deployed)
 
 | Setting | Value |
 |---|---|
-| Repository / branch | `Namantyagi2727/ragbase`, branch `showcase-deploy` (main plus `maxUploadSize = 1` in the root config; see *Upload size*) |
+| Repository / branch | `Namantyagi2727/ragbase`, branch `showcase-deploy` (main plus two root-config overrides: `maxUploadSize = 1` and `headless = true`) |
 | Main file path | `showcase/streamlit_app.py` |
-| Python | 3.12 (the version the lock was generated for) |
+| Python | 3.12 (deployed environment reported Python 3.12.15) |
 | Dependencies | `showcase/requirements.txt` — a dependency file next to the entry point takes precedence over the root `requirements.txt`, so the heavy local stack is not installed |
 | Config | Root `.streamlit/config.toml` (Community Cloud reads only the root config): theme, usage statistics off |
 | Secrets | None. The showcase needs no keys; Prism and Ollama settings are not used |
@@ -28,9 +30,10 @@ about 2.7 GB memory at most (figure dated February 2024; older guidance said
 1 GB), and apps without traffic for 12 hours go to sleep. A sleeping app shows
 a wake-up page; any visitor can wake it, and the cold start then repeats.
 
-## Resource measurements
+## Resource measurements (local)
 
-Measured on 2026-10-16 on an Apple Silicon Mac (Python 3.12). Showcase
+These are **local** measurements, not production measurements. Measured on
+2026-10-16 on an Apple Silicon Mac (Python 3.12). Showcase
 figures were first taken with Streamlit 1.37.1 and repeated after the update
 to the deployed version, 1.66.0. Linux x86-64 figures will differ somewhat;
 the ratios are the point.
@@ -95,8 +98,8 @@ multi-document answer).
 
 The root `.streamlit/config.toml` on `main` sets `maxUploadSize = 50` for
 local uploads, and Community Cloud reads only the root config. The showcase
-is therefore deployed from `showcase-deploy`, whose only difference is
-`maxUploadSize = 1`.
+is therefore deployed from `showcase-deploy`, which sets `maxUploadSize = 1`
+(and, since the first deployment, `headless = true`; see *Deployment record*).
 
 This is a cap, not a prohibition. Verified on Streamlit 1.66.0 with the cap
 set to 1 MB, using a real browser session (websocket session id plus XSRF
@@ -123,3 +126,97 @@ in total by the platform's memory limit (an exhausted app restarts).
 - The showcase sidebar starts collapsed on phones (`initial_sidebar_state =
   "auto"`), and the recorded-runs disclosure plus a hint on choosing
   questions now also appear on the main page.
+
+## Deployment record
+
+| | |
+|---|---|
+| Live URL | https://ragbase-showcase.streamlit.app/ |
+| Phase 4 merge into `main` | `f5b6d87` (PR #5, merge commit) |
+| Deployment branch | `showcase-deploy` |
+| Upload cap override | `4d293a2` (`server.maxUploadSize = 1`) |
+| Headless override (deployment-only fix) | `569162e` (`server.headless = true`) |
+
+### First deployment failed; cause verified
+
+The first deployment (from `4d293a2`) installed its dependencies correctly —
+from `showcase/requirements.txt` with uv on Python 3.12.15, 36 packages, no
+PyTorch, models, FAISS or LangChain — and then never started: the platform
+health check reported `connection refused`. The log showed Streamlit's
+first-run "enter your email" prompt. Streamlit shows that prompt when
+`server.headless` is false, which is `main`'s setting (it opens a browser for
+local use); with no interactive input the server waits indefinitely.
+Reproduced locally with no Streamlit credentials file and no stdin: with
+`headless = false` the server never became healthy; with `headless = true`
+it did. `569162e` sets `headless = true` on `showcase-deploy` only; after
+the push the platform redeployed and the app was running at the first status
+check (05:20 UTC).
+
+Platform behaviour seen in the build log: Community Cloud replaced the
+pinned `pyarrow 26.0.0` with `24.0.0`, citing a known segfault
+(apache/arrow#50471). The showcase works with it. The platform also noted
+that the repository contains several dependency files and used
+`showcase/requirements.txt`, as intended.
+
+### Live acceptance checks (2026-10-16, anonymous visitor)
+
+Checked in a browser with no Streamlit or GitHub session.
+
+| # | Check | Observed |
+|---|---|---|
+| 1 | Anonymous access | Page loads; the platform's context endpoint reported an anonymous user and no viewer authentication |
+| 2 | All ten curated questions | Each of the ten selections loaded its own question |
+| 3 | Standard and Agentic side by side | Both columns present for all ten, each labelled "— recorded", with the reviewed reference answer |
+| 4 | Citations, evidence, documents, traces, methodology | Cited and uncited passage cards, verification boxes and the full agent trace (8 steps for the hotel-approval question, including the two documents searched) rendered; the documents tab showed the two-column driver handbook with its columns read separately, plus corpus version and checksum; all methodology sections present |
+| 5 | Recorded-run disclosure and provenance | Disclosure on the main page and in the sidebar; provenance panels (two per question) show commit `1aef28a`, model digest `a80c4f17acd5` and seed 1001 |
+| 6 | No question box or uploads | No chat input, text area, file input or uploader. One text field exists: the document dropdown's built-in type-to-filter, which only narrows the eight document names in the browser |
+| 7 | No live inference or heavy ML dependencies | Build log lists Streamlit's dependencies only; the platform reports Streamlit 1.66.0; the showcase code imports no inference, retrieval-model, agent or tabular modules |
+| 8 | No secrets or private documents | Page source contains no API-key names or key-like strings, no local paths, no local document or index names, and no personal email; all documents are the synthetic Northwind corpus |
+| 9 | Resource usage and restart | A real redeploy (after `569162e`) completed and the app served normally afterwards; the public status endpoint reported no CPU throttling |
+| 10 | Desktop and mobile layouts | Readable at 1440 px; at 375 px the sidebar starts collapsed with a visible reopen control and the disclosure is on the main page |
+
+### Production measurements not available
+
+Platform memory, CPU usage and an exact cold-start time are visible only in
+the app owner's Community Cloud view and were not recorded; they are not
+estimated here. The build log shows about 11 seconds from cloning the
+repository to finishing dependency processing on the first deployment.
+
+### Upload endpoint on the live app
+
+The 1 MB cap is set on `showcase-deploy` and its behaviour was verified
+locally on the same Streamlit version (see *Upload size*). A probe of the
+live app was **inconclusive**: through the platform's proxy the test could
+not read an XSRF cookie; a 0.5 MB upload under a test session returned HTTP
+400 and a 1.5 MB upload received no response within 20 seconds. The probe
+was stopped rather than repeated against production. The showcase never
+reads or stores uploaded files; the residual risk is up to about 1 MB per
+upload request held in a session's memory, bounded by the platform's limit.
+
+### Known polish item (not scheduled)
+
+At narrow desktop widths (around 1,100 px) the agent-trace header in each
+half-width column wraps into a narrow column; it remains readable and is
+fine at 1,440 px and on phones. Optional future polish.
+
+## Updating the deployment
+
+`showcase-deploy` is `main` plus two configuration overrides in the root
+`.streamlit/config.toml`: `maxUploadSize = 1` and `headless = true`.
+Community Cloud redeploys automatically when the branch changes. To bring
+approved changes from `main` into the showcase:
+
+```bash
+git checkout showcase-deploy
+git pull --ff-only origin showcase-deploy
+git merge --no-ff main            # merge commit; never rebase or force-push this branch
+# If .streamlit/config.toml conflicts, keep main's other changes but retain
+# both overrides: maxUploadSize = 1 and headless = true.
+git diff main showcase-deploy     # must show only the two overrides (and their comments)
+git push origin showcase-deploy
+```
+
+Then reopen the live URL and repeat the acceptance checks that the change
+could affect. Only approved changes that have passed CI on `main` should be
+merged into the deployment branch; recordings in `showcase/data/` change
+only when re-recording is approved.
