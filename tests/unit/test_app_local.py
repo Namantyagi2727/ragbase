@@ -128,3 +128,64 @@ def test_methodology_section_has_no_numerical_results(app):
     app.run()
     assert "Standard RAG outperformed Agentic RAG" in methodology.TEXT
     assert not re.search(r"\d+(\.\d+)?\s*%|\b0\.\d{2}\b", methodology.TEXT)
+
+
+def test_overlong_questions_are_refused_before_any_model_call(app, monkeypatch):
+    monkeypatch.setattr(config, "MAX_QUESTION_CHARS", 50)
+    app.run()
+    app.chat_input[0].set_value("x" * 51).run()
+    assert not app.exception and app.model.calls == []
+    assert any("limited to 50 characters" in e.value for e in app.error)
+
+
+class _Upload:
+    def __init__(self, name, data=b"Some policy text for indexing.", size=None):
+        self.name, self._data, self.size = name, data, len(data) if size is None else size
+
+    def getbuffer(self):
+        return memoryview(self._data)
+
+
+class _Report:
+    def __init__(self, chunks):
+        self.chunks, self.files_indexed, self.skipped, self.warnings = chunks, ["ok.txt"], [], []
+
+
+def test_session_uploads_enforce_size_and_name_limits_and_replace_the_previous_workspace(monkeypatch, tmp_path):
+    import streamlit as st
+
+    from ui import local_app, uploads
+
+    monkeypatch.setattr(local_app.uploads, "ROOT", tmp_path)
+    written = {}
+
+    def fake_ingest(ingest_dir, **kw):
+        written["files"] = sorted(p.name for p in __import__("pathlib").Path(ingest_dir).iterdir())
+        return _Report(chunks=3)
+
+    monkeypatch.setattr(local_app.ingest, "ingest_documents", fake_ingest)
+    monkeypatch.setattr(local_app, "_activate", lambda *a: None)
+    monkeypatch.setattr(local_app._load_retriever, "clear", lambda: None)
+    monkeypatch.setattr(config, "MAX_UPLOAD_MB", 1)
+    st.session_state.clear()
+    local_app._init_state()
+    previous = uploads.create(tmp_path)
+    st.session_state.workspace = previous
+    local_app._build_session_index([_Upload("ok.txt"), _Upload("../../etc/passwd"),
+                                    _Upload("big.pdf", size=2 * 1024 * 1024)])
+    assert written["files"] == ["ok.txt"]                       # unsafe and oversized files never written
+    assert not previous.path.exists()                           # previous session workspace removed
+    assert st.session_state.workspace.path.parent == tmp_path
+
+
+def test_a_failed_build_removes_its_new_workspace(monkeypatch, tmp_path):
+    import streamlit as st
+
+    from ui import local_app
+
+    monkeypatch.setattr(local_app.uploads, "ROOT", tmp_path)
+    monkeypatch.setattr(local_app.ingest, "ingest_documents", lambda **kw: _Report(chunks=0))
+    st.session_state.clear()
+    local_app._init_state()
+    local_app._build_session_index([_Upload("empty.txt")])
+    assert st.session_state.workspace is None and list(tmp_path.iterdir()) == []

@@ -37,17 +37,19 @@ class Workspace:
         return str(self.path / "index")
 
 
-def create(root: Path = ROOT) -> Workspace:
+def create(root: Path | None = None) -> Workspace:
+    root = root or ROOT
     root.mkdir(parents=True, exist_ok=True)
     path = Path(tempfile.mkdtemp(prefix=PREFIX, dir=root))
     (path / "docs").mkdir()
     return Workspace(path)
 
 
-def remove(ws: Workspace | None, root: Path = ROOT) -> None:
+def remove(ws: Workspace | None, root: Path | None = None) -> None:
     """Delete a workspace created by create(); refuses anything outside the session root."""
     if ws is None:
         return
+    root = root or ROOT
     path = ws.path.resolve()
     if path.parent != root.resolve() or not path.name.startswith(PREFIX):
         raise ValueError(f"refusing to delete {path}: not a RAGBase session workspace")
@@ -62,8 +64,9 @@ def touch(ws: Workspace) -> None:
         pass
 
 
-def sweep(root: Path = ROOT, retention_s: float = RETENTION_S, now: float | None = None) -> int:
-    """Remove session workspaces older than the retention period. Returns how many were removed."""
+def sweep(root: Path | None = None, retention_s: float = RETENTION_S, now: float | None = None) -> int:
+    """Remove session workspaces idle for longer than the retention period. Returns how many were removed."""
+    root = root or ROOT
     if not root.exists():
         return 0
     now = time.time() if now is None else now

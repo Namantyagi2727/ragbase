@@ -103,6 +103,7 @@ DOCS_DIR: str = _env_str("RAGBASE_DOCS_DIR", "./uploaded_docs")     # staging ar
 # Upload / ingestion limits (resource-exhaustion guards)
 MAX_UPLOAD_MB: int = _env_int("RAGBASE_MAX_UPLOAD_MB", 50)
 MAX_UPLOAD_FILES: int = _env_int("RAGBASE_MAX_UPLOAD_FILES", 50)   # per upload in the UI
+MAX_QUESTION_CHARS: int = _env_int("RAGBASE_MAX_QUESTION_CHARS", 2000)  # bounds prompt size per question
 MAX_PDF_PAGES: int = _env_int("RAGBASE_MAX_PDF_PAGES", 500)
 MAX_OCR_PAGES: int = _env_int("RAGBASE_MAX_OCR_PAGES", 50)
 MAX_IMAGE_PIXELS: int = 50_000_000

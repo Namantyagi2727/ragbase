@@ -242,6 +242,9 @@ def _chat_model():
 def answer(prompt: str) -> dict:
     """Answer with the selected mode; returns the chat message to store."""
     mode = MODES[st.session_state.mode]
+    if len(prompt) > config.MAX_QUESTION_CHARS:
+        return {"role": "assistant", "view": None, "error": True,
+                "content": f"Questions are limited to {config.MAX_QUESTION_CHARS} characters."}
     docs_dir = st.session_state.docs_dir or config.DOCS_DIR
     tables = tabular.load_tables(docs_dir) if config.TABULAR_QA_ENABLED else []
     message = {"role": "assistant", "content": "", "view": None}
@@ -271,7 +274,7 @@ def _render_message(msg: dict) -> None:
     if msg.get("error"):
         st.error(msg["content"])
         return
-    st.markdown(msg["content"])
+    st.markdown(rv.answer_html(msg["content"]), unsafe_allow_html=True)   # escaped text, not Markdown
     if msg.get("view"):
         rv.render_view(msg["view"])
 
@@ -311,7 +314,7 @@ def main() -> None:
         if prompt:
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
-                st.markdown(prompt)
+                st.markdown(rv.answer_html(prompt), unsafe_allow_html=True)
             with st.chat_message("assistant"):
                 if not st.session_state.index_built:
                     message = {"role": "assistant", "content": "Upload documents and build the index first.",

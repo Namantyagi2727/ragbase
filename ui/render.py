@@ -105,6 +105,27 @@ def view_from_agent(res) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Answer text
+# ---------------------------------------------------------------------------
+
+def answer_html(text: str) -> str:
+    """Model output as escaped text, never as Markdown or HTML.
+
+    Rendering model output as Markdown would let a prompt-injected document make
+    the browser fetch an attacker's image URL (leaking text in the query string)
+    or show disguised links. Lines starting with "> " (RAGBase's own notes)
+    are shown as notes.
+    """
+    parts = []
+    for line in (text or "").split("\n"):
+        if line.startswith("> "):
+            parts.append(f'<div class="rb-answer-note">{_e(line[2:])}</div>')
+        else:
+            parts.append(_e(line) + "<br>")
+    return f'<div class="rb-answer">{"".join(parts)}</div>'
+
+
+# ---------------------------------------------------------------------------
 # Citations
 # ---------------------------------------------------------------------------
 
@@ -130,7 +151,12 @@ def citation_warnings(view: dict) -> list[str]:
 def passage_html(e: dict, cited: bool, full: bool = False) -> str:
     text = e["text"] if full else e["text"][:220].replace("\n", " ") + ("…" if len(e["text"]) > 220 else "")
     loc = f'<div class="rb-source-loc">@ {_e(e["loc"])}</div>' if e.get("loc") else ""
-    eid = f'<span class="rb-eid">[{_e(e["eid"])}]</span> ' if cited else f'<span class="rb-eid-dim">{_e(e["eid"])}</span> '
+    if not e.get("eid"):
+        eid = ""
+    elif cited:
+        eid = f'<span class="rb-eid">[{_e(e["eid"])}]</span> '
+    else:
+        eid = f'<span class="rb-eid-dim">{_e(e["eid"])}</span> '
     return (f'<div class="rb-source{"" if cited else " uncited"}">'
             f'<div class="rb-source-path"><i class="rb-source-icon">◈</i>{eid}{_e(e["source"])}</div>'
             f'{loc}<div class="rb-source-snippet">{_e(text)}</div></div>')
