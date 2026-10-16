@@ -9,8 +9,11 @@ font                  = "sans serif"
 [server]
 headless = false
 
-# Keep in sync with RAGBASE_MAX_UPLOAD_MB (config.py); Streamlit enforces this first.
-maxUploadSize = 50
+# showcase-deploy branch: the public showcase has no upload widget and never
+# reads uploads; this caps what Streamlit's upload endpoint will accept into
+# session memory (it is a cap, not a prohibition). main keeps 50 MB for the
+# full local app. See docs/DEPLOYMENT.md.
+maxUploadSize = 1
 
 [browser]
 # Do not send Streamlit usage statistics (local app and public showcase).
