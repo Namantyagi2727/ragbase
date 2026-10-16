@@ -11,9 +11,9 @@ test results and known limitations.
 | 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
 | 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — merged ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
 | 2 | Optional Prism gateway integration | Done — merged ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
-| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | In progress — corrected labels awaiting final approval; harness built ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
-| 4 | Streamlit integration and public demo | Not started |
-| 5 | Documentation and final review | Not started |
+| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Done — merged ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
+| 4 | Streamlit integration and public demo | Done — merged ([PR #5](https://github.com/Namantyagi2727/ragbase/pull/5), closeout [PR #6](https://github.com/Namantyagi2727/ragbase/pull/6)); live at https://ragbase-showcase.streamlit.app/ |
+| 5 | Documentation, portfolio and reproducibility | In progress ([PR #7](https://github.com/Namantyagi2727/ragbase/pull/7)) |
 
 ## Phase 0 — audit findings (summary)
 
@@ -416,7 +416,7 @@ Record the originating provider on cache entries; a per-key guardrail policy
 for document-grounded clients; a context-length pass-through; native
 structured output.
 
-## Phase 3 — Evaluation framework (in progress)
+## Phase 3 — Evaluation framework (closed)
 
 ### Two-column PDF extraction
 
@@ -625,7 +625,7 @@ Notes:
   `showcase-deploy` (merge commit, no rebase or force-push) and keeping the
   two overrides; see *Updating the deployment* in `docs/DEPLOYMENT.md`.
 
-## Phase 5 — Documentation, portfolio and reproducibility (planning)
+## Phase 5 — Documentation, portfolio and reproducibility (in progress)
 
 Goal: present RAGBase accurately for GitHub, recruiters and interviews. No
 changes to Prism, the agent, showcase recordings, approved labels or the
@@ -634,18 +634,22 @@ after the proposed presentation is approved.
 
 Checklist:
 
-- [ ] Audit of README and docs (done in planning; findings in the PR)
-- [ ] Architecture document with Mermaid diagrams drawn from the code
-- [ ] README rewrite (value proposition, recorded-showcase disclosure, real
-      screenshots, features, architecture, install, evaluation and CI
-      overview, security and limitations, navigation)
-- [ ] Refresh screenshots from the deployed showcase and the local app
-- [ ] Public evaluation document — review gate: numbers approved first
-- [ ] Demo walkthrough
-- [ ] Reproducibility: clean-environment install check, pinned constraints
-      for the local stack, accurate badges (including CI), link check
-- [ ] Legacy latency benchmark (`BENCHMARKS.md`, root benchmark scripts)
-      updated or relocated with historical context
+- [x] Audit of README and docs (findings in PR #7)
+- [x] Architecture document with Mermaid diagrams drawn from the code
+      (`docs/ARCHITECTURE.md`; all diagrams render with Mermaid 11)
+- [x] README rewrite (value proposition, recorded-showcase disclosure, real
+      screenshots, features, architecture, install, evaluation methodology
+      and CI overview, security and limitations, navigation) — no numerical
+      results yet
+- [x] Screenshots from the deployed showcase and the local app (live
+      Ollama runs) in `docs/images/`; outdated screenshots removed
+- [ ] Public evaluation results — review gate: numbers approved first
+- [x] Demo walkthrough (`docs/DEMO.md`)
+- [x] Reproducibility: `constraints.txt` (pinned, all platforms, Python
+      3.12) used by the documented install and by CI; clean-environment
+      install and full test run; accurate badges including CI; link check
+- [x] Historical latency benchmark retitled and corrected; its scripts
+      validated against the current code
 - [ ] Resume, portfolio and LinkedIn text (kept outside the repository)
 
 ## Carried forward to later phases
