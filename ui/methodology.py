@@ -16,10 +16,11 @@ TEXT = """
 | **Standard RAG** | One hybrid search (FAISS + TF-IDF, reciprocal-rank fusion, cross-encoder reranking), one model call, numbered evidence citations checked for validity |
 | **Agentic RAG** | A bounded LangGraph workflow: plan → retrieve (with comparison-aware document selection) → write → verify claims against their citations → optional refinement |
 
-All three used the same synthetic corpus (eight policy documents and a CSV),
-the same local model (`llama3.2` 3B via Ollama), the same retrieval
-configuration and fixed seeds, over 42 human-reviewed questions with three
-repeats each.
+All three systems answered the same 42 reviewed questions over the same
+synthetic corpus using the same local generator model, with three repeats
+each. The original implementation retained its historical ingestion and
+retrieval behavior and did not support seeded generation. Standard and
+Agentic RAG used the updated hybrid retriever and fixed seeds.
 
 ### What was measured
 
