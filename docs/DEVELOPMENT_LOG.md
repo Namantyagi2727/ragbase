@@ -11,9 +11,9 @@ test results and known limitations.
 | 1A | Foundations: retrieval fusion, chunk IDs, shared citations, LLM adapter, security fixes, tests | Done — merged ([PR #1](https://github.com/Namantyagi2727/ragbase/pull/1)) |
 | 1B | LangGraph agentic engine (planner, retrieval tools, synthesis, verifier) | Done — merged ([PR #2](https://github.com/Namantyagi2727/ragbase/pull/2)) |
 | 2 | Optional Prism gateway integration | Done — merged ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
-| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | In progress — corrected labels awaiting final approval; harness built ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
-| 4 | Streamlit integration and public demo | Not started |
-| 5 | Documentation and final review | Not started |
+| 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Done — merged ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
+| 4 | Streamlit integration and public demo | Done — merged ([PR #5](https://github.com/Namantyagi2727/ragbase/pull/5), closeout [PR #6](https://github.com/Namantyagi2727/ragbase/pull/6)); live at https://ragbase-showcase.streamlit.app/ |
+| 5 | Documentation, portfolio and reproducibility | Complete, awaiting merge approval ([PR #7](https://github.com/Namantyagi2727/ragbase/pull/7); methodology hotfix [PR #8](https://github.com/Namantyagi2727/ragbase/pull/8)) |
 
 ## Phase 0 — audit findings (summary)
 
@@ -416,7 +416,7 @@ Record the originating provider on cache entries; a per-key guardrail policy
 for document-grounded clients; a context-length pass-through; native
 structured output.
 
-## Phase 3 — Evaluation framework (in progress)
+## Phase 3 — Evaluation framework (closed)
 
 ### Two-column PDF extraction
 
@@ -624,6 +624,54 @@ Notes:
 - Future approved changes reach the showcase by merging `main` into
   `showcase-deploy` (merge commit, no rebase or force-push) and keeping the
   two overrides; see *Updating the deployment* in `docs/DEPLOYMENT.md`.
+
+## Phase 5 — Documentation, portfolio and reproducibility (complete, awaiting merge approval)
+
+Goal: present RAGBase accurately for GitHub, recruiters and interviews. No
+changes to Prism, the agent, showcase recordings, approved labels or the
+deployment without separate approval. Numerical results are published only
+after the proposed presentation is approved.
+
+Checklist:
+
+- [x] Audit of README and docs (findings in PR #7)
+- [x] Architecture document with Mermaid diagrams drawn from the code
+      (`docs/ARCHITECTURE.md`; all diagrams render with Mermaid 11)
+- [x] README rewrite (value proposition, recorded-showcase disclosure, real
+      screenshots, features, architecture, install, evaluation methodology
+      and CI overview, security and limitations, navigation) — no numerical
+      results yet
+- [x] Screenshots from the deployed showcase and the local app (live
+      Ollama runs) in `docs/images/`; outdated screenshots removed
+- [x] Public evaluation results (`docs/EVALUATION.md` and the README results
+      section), published together after exact-text approval
+- [x] Demo walkthrough (`docs/DEMO.md`)
+- [x] Reproducibility: `constraints.txt` (pinned, all platforms, Python
+      3.12) used by the documented install and by CI; clean-environment
+      install and full test run; accurate badges including CI; link check
+- [x] Historical latency benchmark retitled and corrected; its scripts
+      validated against the current code
+
+Review corrections (after the first M1 review): the README now states what
+the three evaluated systems shared and how they differed (the original code
+used its historical retriever, its own ingestion, free-form citations and
+unseeded generation), with the unit of each measure; the demo walkthrough
+separates claim-checked complex-route answers from simple-route answers.
+The showcase's methodology tab said all three systems used the same
+retrieval configuration and seeds; corrected by the approved hotfix PR #8
+(merge `8311e70`) and deployed by merging `main` into `showcase-deploy`
+(`2676d7e`, overrides retained). The app had gone to sleep; after the wake
+button it was running within about 22 seconds, and the live methodology
+tab showed the corrected wording.
+
+Final review corrections: the evaluation documents state the evidence
+budget per mode (Original and Standard five passages; the complex Agentic
+route up to 12 across planned and per-document searches) and that the
+retrieval metric uses a fixed five-passage budget; Standard and Agentic RAG
+are described as sharing the modern retrieval components but differing in
+orchestration, evidence gathering, model calls and claim checks. The
+reproduction commands were executed against the CLI on a small scope.
+- [x] Resume, portfolio and LinkedIn text approved (kept outside the repository)
 
 ## Carried forward to later phases
 

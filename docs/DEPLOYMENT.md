@@ -193,6 +193,19 @@ was stopped rather than repeated against production. The showcase never
 reads or stores uploaded files; the residual risk is up to about 1 MB per
 upload request held in a session's memory, bounded by the platform's limit.
 
+### Later updates
+
+| Date | Change | Deployment |
+|---|---|---|
+| 2026-10-17 | Methodology tab wording corrected (PR #8, merge `8311e70`): the three evaluated systems did not share retrieval or seeds | `main` merged into `showcase-deploy` (`2676d7e`); `git diff main showcase-deploy` showed only the two overrides |
+
+Observed during that update: the app had gone to sleep after a period
+without traffic, so the push alone did not make the change visible. After
+the public "wake" button was pressed, the platform status endpoint reported
+the app running about 22 seconds later (polled every 5 seconds from
+outside), and the live methodology tab showed the corrected text. This is
+an external observation, not a platform metric.
+
 ### Known polish item (not scheduled)
 
 At narrow desktop widths (around 1,100 px) the agent-trace header in each
