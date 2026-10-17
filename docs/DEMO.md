@@ -20,11 +20,18 @@ Choose **A direct policy lookup**. Both answers appear side by side:
 - **Standard RAG** — one hybrid search, one model call. Its status box says
   "Not checked": Standard RAG does not verify claims.
 - **Agentic RAG** — a LangGraph workflow that plans, retrieves, writes an
-  answer and checks each claim against its citation. Here its check judged
-  the claim supported, with a note that this is an automated check, not a
-  guarantee.
+  answer and checks each claim against its citation. For this question the
+  planner chose the complex route, so the claim was checked: it was judged
+  supported, with a note that this is an automated check, not a guarantee.
 
-![Recorded Standard and Agentic answers side by side](images/showcase-compare.png)
+Not every Agentic answer is claim-checked. When the planner judges a
+question simple, the agent answers like Standard RAG and the status says
+"Not checked — simple route" (for example **The two-column page
+regression** and **Combining two documents**).
+
+![Recorded Standard and Agentic answers side by side (shown: Comparing two policy versions)](images/showcase-compare.png)
+
+*The screenshot shows a different curated question, "Comparing two policy versions": both answers give the right change, and the agent's check flags that its single citation covers only the 2024 figure.*
 
 ## 3. Sources, citations and verification (0:50–1:20) [Recorded]
 
@@ -36,9 +43,10 @@ not used. Citations show provenance; they are never presented as proof.
 
 Choose **A rule that changed in two ways** and open **Agent execution**. The
 agent searched exactly the 2023 and 2024 travel policies (documents named in
-the question). Its verifier flagged two figures because their citations
-pointed at the wrong passage of the right document, and the answer carries a
-warning. The Standard answer gets the thresholds right but wrongly says
+the question). Its citation-grounded checks confirmed two of three claims and
+flagged two figures that do not appear in the passages they cite — the
+citations point at the wrong passage of the right document — so the answer
+carries a warning. The Standard answer gets the thresholds right but wrongly says
 approval above 250 dollars was removed.
 
 ![Agent execution summary](images/showcase-agent-trace.png)
