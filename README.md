@@ -43,7 +43,7 @@ anything. To try your own documents and questions, run it locally.
   presented as evidence about an answer, never as proof that it is correct.
 - **Evaluation framework** — a human-reviewed benchmark comparing the
   original code, Standard RAG and Agentic RAG, with versioned labels and
-  scoring ([methodology](#evaluation)).
+  scoring ([results](#evaluation), [full evaluation](docs/EVALUATION.md)).
 - **CI/CD** — linting, unit and integration tests on every pull request, a
   manually triggered live-inference workflow, and a pinned deployment for
   the public showcase.
@@ -148,16 +148,18 @@ three systems on one local machine:
 
 - **Shared by all three:** the question set and reviewed labels, the corpus,
   the generator model (`llama3.2` 3B via Ollama, same model digest), the
-  embedding model, chunking (512 characters, 64 overlap) and five passages
-  per answer.
+  embedding model and chunking (512 characters, 64 overlap).
 - **Different:** the **original pre-upgrade code** (commit `909df31`) ran
   with its own ingestion (no column-aware PDF reading), its historical
   retriever (in practice semantic search only, with the reranker re-ordering
   those five results), free-form citations, and **unseeded** generation.
-  **Standard** and **Agentic RAG** share the current ingestion and hybrid
-  retriever (semantic and keyword search fused, reranked from 20
-  candidates) and use **fixed seeds** per repeat. Agentic RAG adds planning,
-  claim checks and refinement, so it makes more model calls.
+  **Standard** and **Agentic RAG** share the current ingestion and modern
+  hybrid retriever (semantic and keyword search fused, reranked from 20
+  candidates) and use **fixed seeds** per repeat, but differ in retrieval
+  orchestration and evidence gathering: Standard RAG uses one search and
+  five passages; the agent's complex route runs planned and per-document
+  searches and can gather up to 12 passages. The agent also adds claim
+  checks and refinement, so it makes more model calls.
 
 Every score uses the final labels (v1.3) and scorer (v1.2). What was
 measured, each separately:
@@ -173,7 +175,8 @@ measured, each separately:
   cited passages contain the expected evidence from the expected document. The original code's
   free-form citations make these not applicable to it.
 - **Retrieval and cost**, per response: share of the expected passages
-  among the first five a system retrieved; model calls, tokens and latency.
+  among the first five each system retrieved (a fixed budget; the agent may
+  gather more); model calls, tokens and latency.
 - **Verifier challenge set** (per labelled claim), **tabular security suite**
   (per case), and a calibrated local **LLM judge** used as supporting
   evidence only.
@@ -184,8 +187,43 @@ benchmark exposed two genuine agent defects — comparison questions searched
 documents in alphabetical order, and partly hedged answers were treated as
 refusals — which were fixed and re-measured in separately labelled runs.
 Label and scoring changes are versioned and reported separately from
-application changes ([change log](docs/EVALUATION_CHANGELOG.md)). Detailed
-results will be published here after review.
+application changes ([change log](docs/EVALUATION_CHANGELOG.md)).
+
+### Results
+
+42 questions × 3 repeats = **126 responses per system**; final labels v1.3,
+scorer v1.2; `llama3.2` 3B via Ollama on one Apple Silicon Mac. The original
+code differs from the other two in retriever, ingestion, citation style and
+seeding (see above), so its row reflects the whole historical system, not
+just its answering strategy.
+
+| Metric (unit · denominator per system) | Original RAGBase | Standard RAG | Agentic RAG |
+|---|---|---|---|
+| Correct, keyword proxy (per response · 126) | 0.71 (89/126) | **0.83** (104/126) | 0.79 (99/126) |
+| Wrongly declined an answerable question (per response · 102 responses to the 34 fully answerable questions) | 0.09 (9/102) | 0.00 (0/102) | 0.04 (4/102) |
+| Expected evidence among the first 5 passages retrieved — a fixed budget; the agent can gather more (mean per-response share · 111 responses to the 37 questions with expected evidence) | 0.86 | 0.97 | 0.98 |
+| Model calls per response (mean · 126) | 1 | 1 | 3.4 |
+| Latency per response, median / 95th percentile (wall clock · 126) | 1.02 / 1.66 s | 0.82 / 1.42 s | 1.77 / 6.86 s |
+
+- Under these conditions **Standard RAG was stronger overall** and made
+  fewer model calls than the agent, with lower latency. At the category
+  level, Agentic RAG exceeded Standard RAG only on conflicting-information
+  questions in this small benchmark; both modes remain weak on
+  multi-document synthesis and false premises.
+- **The evaluation found an agent defect**: comparison questions searched
+  documents in alphabetical order. After the fix, in a separately labelled
+  run scored with the same final scorer, Agentic RAG's keyword-proxy
+  correctness rose from **0.66 (83/126) to 0.79 (99/126)**. The pre-fix
+  results are preserved.
+- **Keyword-proxy correctness** means the response contains every reviewed
+  required fact and no known-wrong statement. It is not human-verified
+  semantic accuracy, and these figures are specific to this benchmark —
+  not a measure of production accuracy or hallucination rates. The claim
+  verifier, tabular feature and LLM judge each have documented error rates.
+
+Metric definitions, citation results, categories, the defect and its fix,
+verifier, tabular and judge results, and limitations:
+**[docs/EVALUATION.md](docs/EVALUATION.md)**.
 
 ## Security and privacy
 
@@ -232,12 +270,13 @@ evals/                  Benchmark corpus, reviewed labels, harness, metrics, rep
 showcase/               Public showcase entry point, recorded runs, curated questions
 scripts/                Showcase recorder, Prism helpers
 tests/                  Unit and integration tests
-docs/                   Architecture, deployment, evaluation change log, Prism, demo, development log
+docs/                   Architecture, evaluation, deployment, evaluation change log, Prism, demo, development log
 ```
 
 | Document | Contents |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagrams of every component |
+| [docs/EVALUATION.md](docs/EVALUATION.md) | Evaluation protocol, metric definitions, full results and limitations |
 | [docs/DEMO.md](docs/DEMO.md) | A short guided walkthrough |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Showcase deployment, measurements, security checklist |
 | [docs/EVALUATION_CHANGELOG.md](docs/EVALUATION_CHANGELOG.md) | Label, scoring and output versions |
