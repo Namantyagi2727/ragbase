@@ -650,6 +650,16 @@ Checklist:
       install and full test run; accurate badges including CI; link check
 - [x] Historical latency benchmark retitled and corrected; its scripts
       validated against the current code
+
+Review corrections (after the first M1 review): the README now states what
+the three evaluated systems shared and how they differed (the original code
+used its historical retriever, its own ingestion, free-form citations and
+unseeded generation), with the unit of each measure; the demo walkthrough
+separates claim-checked complex-route answers from simple-route answers.
+Numerical results remain unpublished pending approval. The showcase's
+methodology tab (`ui/methodology.py`) still says all three systems used the
+same retrieval configuration and seeds; a wording fix there needs approval
+because it changes deployed application text.
 - [ ] Resume, portfolio and LinkedIn text (kept outside the repository)
 
 ## Carried forward to later phases
