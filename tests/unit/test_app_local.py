@@ -191,3 +191,13 @@ def test_a_failed_build_removes_its_new_workspace(monkeypatch, tmp_path):
     local_app._init_state()
     local_app._build_session_index([_Upload("empty.txt")])
     assert st.session_state.workspace is None and list(tmp_path.iterdir()) == []
+
+
+def test_methodology_describes_how_the_systems_differed():
+    from ui import methodology
+
+    text = " ".join(methodology.TEXT.split())
+    assert ("The original implementation retained its historical ingestion and retrieval behavior and did not "
+            "support seeded generation.") in text
+    assert "Standard and Agentic RAG used the updated hybrid retriever and fixed seeds." in text
+    assert "same retrieval configuration" not in text
