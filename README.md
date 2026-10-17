@@ -87,7 +87,7 @@ states, the Prism gateway and the local/showcase split — are in
   <img src="docs/images/showcase-documents.png" alt="Source document viewer showing a two-column PDF page read column by column" width="480">
 </p>
 
-*Left: the agent's execution summary for a comparison question (recorded run) — it searched exactly the two policy versions, and its verifier flagged two figures whose citations pointed at the wrong passage. Right: the source-document viewer.*
+*Left: the agent's execution summary for a comparison question (recorded run) — it searched exactly the two policy versions, and its citation checks flagged two figures that don't appear in the passages they cite. Right: the source-document viewer.*
 
 ## Quickstart (local, Python 3.12)
 
@@ -143,24 +143,43 @@ the reranker (`cross-encoder/ms-marco-MiniLM-L-6-v2`) are set in `config.py`.
 ## Evaluation
 
 RAGBase was evaluated on **42 human-reviewed questions** over a synthetic
-eight-document corpus, comparing three systems — the original pre-upgrade
-code, Standard RAG and Agentic RAG — with the same local model
-(`llama3.2` 3B), retrieval configuration and seeds, three repeats each.
+eight-document corpus, with **three repeats** of each question, comparing
+three systems on one local machine:
 
-What was measured, separately:
+- **Shared by all three:** the question set and reviewed labels, the corpus,
+  the generator model (`llama3.2` 3B via Ollama, same model digest), the
+  embedding model, chunking (512 characters, 64 overlap) and five passages
+  per answer.
+- **Different:** the **original pre-upgrade code** (commit `909df31`) ran
+  with its own ingestion (no column-aware PDF reading), its historical
+  retriever (in practice semantic search only, with the reranker re-ordering
+  those five results), free-form citations, and **unseeded** generation.
+  **Standard** and **Agentic RAG** share the current ingestion and hybrid
+  retriever (semantic and keyword search fused, reranked from 20
+  candidates) and use **fixed seeds** per repeat. Agentic RAG adds planning,
+  claim checks and refinement, so it makes more model calls.
 
-- **Correctness as a keyword proxy** — the answer contains the reviewed
-  required facts and no known-wrong statement. This is not human-verified
-  semantic accuracy.
-- **Abstention** — declining unanswerable questions, and not declining answerable ones.
-- **Citations** — whether cited IDs exist, and separately whether the cited
-  passages contain the expected evidence.
-- **Retrieval and cost** — expected passages found; model calls, tokens and latency.
-- **Verifier challenge set**, **tabular security suite**, and a calibrated
-  local **LLM judge** used as supporting evidence only.
+Every score uses the final labels (v1.3) and scorer (v1.2). What was
+measured, each separately:
 
-Findings: under the tested configuration **Standard RAG performed best
-overall**, at a fraction of the agent's model calls and latency. The
+- **Correctness (keyword proxy)**, per response: the answer contains every
+  reviewed required fact and no known-wrong statement. This is not
+  human-verified semantic accuracy.
+- **Abstention**, per response: declining the unanswerable questions, and
+  wrongly declining the answerable ones.
+- **Citations**, per response: whether the answer's citations are valid
+  (every cited ID refers to a retrieved passage, no invented references, and
+  at least one citation unless it declines); separately, what share of the
+  cited passages contain the expected evidence from the expected document. The original code's
+  free-form citations make these not applicable to it.
+- **Retrieval and cost**, per response: share of the expected passages
+  among the first five a system retrieved; model calls, tokens and latency.
+- **Verifier challenge set** (per labelled claim), **tabular security suite**
+  (per case), and a calibrated local **LLM judge** used as supporting
+  evidence only.
+
+Findings: under the tested conditions **Standard RAG was stronger overall**
+and made fewer model calls than the agent, with lower latency. The
 benchmark exposed two genuine agent defects — comparison questions searched
 documents in alphabetical order, and partly hedged answers were treated as
 refusals — which were fixed and re-measured in separately labelled runs.
