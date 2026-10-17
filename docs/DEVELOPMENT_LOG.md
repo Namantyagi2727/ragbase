@@ -13,7 +13,7 @@ test results and known limitations.
 | 2 | Optional Prism gateway integration | Done — merged ([PR #3](https://github.com/Namantyagi2727/ragbase/pull/3)) |
 | 3 | Evaluation dataset, deterministic metrics, LLM-as-a-judge, CI | Done — merged ([PR #4](https://github.com/Namantyagi2727/ragbase/pull/4)) |
 | 4 | Streamlit integration and public demo | Done — merged ([PR #5](https://github.com/Namantyagi2727/ragbase/pull/5), closeout [PR #6](https://github.com/Namantyagi2727/ragbase/pull/6)); live at https://ragbase-showcase.streamlit.app/ |
-| 5 | Documentation, portfolio and reproducibility | Complete, awaiting merge approval ([PR #7](https://github.com/Namantyagi2727/ragbase/pull/7); methodology hotfix [PR #8](https://github.com/Namantyagi2727/ragbase/pull/8)) |
+| 5 | Documentation, portfolio and reproducibility | Done — merged ([PR #7](https://github.com/Namantyagi2727/ragbase/pull/7), merge `436317b`; methodology hotfix [PR #8](https://github.com/Namantyagi2727/ragbase/pull/8)) |
 
 ## Phase 0 — audit findings (summary)
 
@@ -625,7 +625,7 @@ Notes:
   `showcase-deploy` (merge commit, no rebase or force-push) and keeping the
   two overrides; see *Updating the deployment* in `docs/DEPLOYMENT.md`.
 
-## Phase 5 — Documentation, portfolio and reproducibility (complete, awaiting merge approval)
+## Phase 5 — Documentation, portfolio and reproducibility (closed)
 
 Goal: present RAGBase accurately for GitHub, recruiters and interviews. No
 changes to Prism, the agent, showcase recordings, approved labels or the
@@ -672,6 +672,13 @@ are described as sharing the modern retrieval components but differing in
 orchestration, evidence gathering, model calls and claim checks. The
 reproduction commands were executed against the CLI on a small scope.
 - [x] Resume, portfolio and LinkedIn text approved (kept outside the repository)
+
+## Project status
+
+Phases 0–5 are finished. `main` holds the full local application, the
+evaluation framework and its published results, and the documentation. The
+public showcase runs from `showcase-deploy`; see `docs/DEPLOYMENT.md` for
+how the two branches relate and how to update the deployment.
 
 ## Carried forward to later phases
 

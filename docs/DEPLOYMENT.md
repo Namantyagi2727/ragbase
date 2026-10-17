@@ -212,6 +212,16 @@ At narrow desktop widths (around 1,100 px) the agent-trace header in each
 half-width column wraps into a narrow column; it remains readable and is
 fine at 1,440 px and on phones. Optional future polish.
 
+## Deployment branch status
+
+`showcase-deploy` was last updated at `2676d7e` (2026-10-17, methodology
+wording fix). Since then `main` has moved ahead with documentation, CI and
+screenshot changes only (Phase 5, merge `436317b`); none of the files the
+showcase serves or imports differ, so the live app is current in behaviour
+and the deployment branch was intentionally not redeployed just to
+synchronise documentation. It is brought up to date the next time an
+approved change affects the showcase.
+
 ## Updating the deployment
 
 `showcase-deploy` is `main` plus two configuration overrides in the root
