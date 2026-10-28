@@ -225,6 +225,54 @@ Metric definitions, citation results, categories, the defect and its fix,
 verifier, tabular and judge results, and limitations:
 **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 
+### Run the benchmark yourself
+
+With Ollama running and `llama3.2` pulled (and a full clone, since the
+original baseline is extracted from commit `909df31`):
+
+```bash
+python -m evals run --out evals/results/run-a --modes original,standard,agentic --repeats 3 --seed 1000 --labels 1.3 --scoring 1.2
+```
+
+This writes the records, `summary.csv` and `report.md` to
+`evals/results/run-a` (ignored by git); the full run took about ten minutes
+on the Mac used above. A fresh run is an independent measurement: outputs can
+differ across machines and Ollama versions. Comparing runs and other options
+are in [docs/EVALUATION.md](docs/EVALUATION.md#reproducing).
+
+## CI/CD and testing
+
+**Automatic** — on every pull request and every push to `main`
+([`ci.yml`](.github/workflows/ci.yml)), installed with `constraints.txt`:
+
+| Job | What it runs | Models |
+|---|---|---|
+| Lint | `ruff check .` | none |
+| Unit tests | `pytest -m "not integration and not live"` — retrieval, citations, the agent graph, the verifier, the evaluation metrics and harness, tabular security, both Streamlit apps and the showcase restrictions | none; LLM calls use scripted fake models |
+| Integration | `pytest -m "integration and not live"` — retrieval and indexing with the real embedding and reranker models, session-isolated uploads | real embedding and reranker models; **no LLM** |
+
+No real LLM runs in automatic CI.
+
+**Manual** — the [live evaluation workflow](.github/workflows/eval-live.yml)
+is triggered by hand from GitHub Actions. It installs Ollama on a CPU runner,
+runs a 15-question subset (`ci_subset`) with real `llama3.2:3b` inference,
+scores it with labels 1.3 and scorer 1.2, and uploads the results as an
+artifact. It is labelled "development": it checks that the pipeline works end
+to end and does not replace the full local benchmark. Its job summary shows
+status, configuration and runtime only.
+
+**Local only** — tests marked `live` need a running Ollama server (and, for
+Prism, a configured gateway and key). They are excluded from CI and skip
+automatically when the service is unavailable:
+
+```bash
+pytest -m live
+```
+
+**Deployment** — the public showcase runs from the `showcase-deploy` branch on
+Streamlit Community Cloud and redeploys automatically when that branch
+changes; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#updating-the-deployment).
+
 ## Security and privacy
 
 - **Local by default** — with the Ollama backend, documents and questions
